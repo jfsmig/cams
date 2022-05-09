@@ -30,7 +30,6 @@ func (ls *LanScanner) RunLoop(ctx context.Context, wg *sync.WaitGroup, register 
 			close(ls.trigger)
 			return
 		case generation := <-ls.trigger:
-			Logger.Info().Str("name", ls.ItfName).Str("action", "discover").Msg("interface")
 			devices := goonvif.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
 			register(ctx, generation, devices)
 		}

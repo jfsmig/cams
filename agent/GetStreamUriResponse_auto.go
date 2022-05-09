@@ -10,12 +10,12 @@ package main
 import (
 	"encoding/xml"
 	"io/ioutil"
-
+	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/media"
 )
 
-func call_GetStreamUri_parse_GetStreamUriResponse(dev goonvif.Device, request media.GetStreamUri) (media.GetStreamUriResponse, error) {
+func call_GetStreamUri_parse_GetStreamUriResponse(dev *goonvif.Device, request media.GetStreamUri) (media.GetStreamUriResponse, error) {
 	type Envelope struct {
 		Header struct{}
 		Body   struct {
@@ -26,18 +26,23 @@ func call_GetStreamUri_parse_GetStreamUriResponse(dev goonvif.Device, request me
 	var reply Envelope
 
 	if httpReply, err := dev.CallMethod(request); err != nil {
-		return reply.Body.GetStreamUriResponse, err
+		return reply.Body.GetStreamUriResponse, errors.Trace(err)
 	} else {
+		Logger.Debug().
+			Str("msg", httpReply.Status).
+			Int("status", httpReply.StatusCode).
+			Str("rpc", "GetStreamUriResponse").
+			Msg("RPC")
+
 		// FIXME(jfs): Get rid of this buffering
-		if b, err := ioutil.ReadAll(httpReply.Body); err != nil {
-			return reply.Body.GetStreamUriResponse, err
-		} else {
-			if err = xml.Unmarshal(b, &reply); err != nil {
-				return reply.Body.GetStreamUriResponse, err
-			} else {
-				return reply.Body.GetStreamUriResponse, nil
-			}
+		b, err := ioutil.ReadAll(httpReply.Body)
+		if err != nil {
+			return reply.Body.GetStreamUriResponse, errors.Trace(err)
 		}
+		if err = xml.Unmarshal(b, &reply); err != nil {
+			return reply.Body.GetStreamUriResponse, errors.Trace(err)
+		} 
+		return reply.Body.GetStreamUriResponse, nil
 	}
 }
 

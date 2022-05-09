@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/base"
+	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/media"
 	"github.com/use-go/onvif/xsd/onvif"
@@ -13,20 +14,17 @@ import (
 )
 
 type OnVifDevice struct {
+	endpoint string
+	user     string
+	password string
+
 	generation uint32
-	onvifURL   string
-	dev        goonvif.Device
-	client     gortsplib.Client
+
+	onvifClient *goonvif.Device
+	rtspClient  gortsplib.Client
 }
 
-func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
-	var sourceUrl *base.URL
-	var err error
-
-	Logger.Info().Str("url", d.onvifURL).Str("action", "run").Msg("device")
-
-	//d.dev.Authenticate(user, password)
-
+func (d *OnVifDevice) GetMediaUrl(ctx context.Context) (*base.URL, error) {
 	request := media.GetStreamUri{
 		StreamSetup: onvif.StreamSetup{
 			Stream: onvif.StreamType("000"),
@@ -38,63 +36,83 @@ func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
 		ProfileToken: onvif.ReferenceToken("000"),
 	}
 
-	reply, err := call_GetStreamUri_parse_GetStreamUriResponse(d.dev, request)
+	mediaUriReply, err := call_GetStreamUri_parse_GetStreamUriResponse(d.onvifClient, request)
 	if err != nil {
-		log.Panicln(err)
-	} else {
-		log.Println(reply)
+		return nil, errors.Annotate(err, "rpc")
 	}
 
-	sourceUrlRaw := strings.Replace(string(reply.MediaUri.Uri), "rtsp://", "rtsp://"+user+":"+password+"@", 1)
-	sourceUrl, err = base.ParseURL(sourceUrlRaw)
+	sourceUrlRaw := strings.Replace(string(mediaUriReply.MediaUri.Uri),
+		"rtsp://", "rtsp://"+d.user+":"+d.password+"@", 1)
+
+	sourceUrl, err := base.ParseURL(sourceUrlRaw)
 	if err != nil {
-		log.Panicln(err)
-	} else {
-		log.Printf("Stream URL: %v", sourceUrl)
+		return nil, errors.Annotate(err, "parse")
+	}
+	return sourceUrl, nil
+}
+
+func (d *OnVifDevice) ConsumeStream(ctx context.Context, a *LanAgent) error {
+	var sourceUrl *base.URL
+	var err error
+
+	sourceUrl, err = d.GetMediaUrl(ctx)
+	if err != nil {
+		return errors.Annotate(err, "getMediaUrl")
 	}
 
-	if err = d.client.Start(sourceUrl.Scheme, sourceUrl.Host); err != nil {
-		log.Panicln(err)
+	Logger.Info().Str("host", sourceUrl.Host).Msg("start!")
+	if err = d.rtspClient.Start(sourceUrl.Scheme, sourceUrl.Host); err != nil {
+		return errors.Annotate(err, "start")
 	}
-	defer func() { _ = d.client.Close() }()
+	defer func() { _ = d.rtspClient.Close() }()
 
-	if opts, err := d.client.Options(sourceUrl); err != nil {
-		log.Panicln(err)
-	} else {
-		log.Printf("Options: %v", opts)
+	if _, err := d.rtspClient.Options(sourceUrl); err != nil {
+		return errors.Annotate(err, "options")
 	}
 
-	d.client.OnPacketRTP = func(c *gortsplib.Client) func(i int, bytes []byte) {
+	d.rtspClient.OnPacketRTP = func(c *gortsplib.Client) func(i int, bytes []byte) {
 		return func(i int, bytes []byte) {
 			log.Printf("RTP %d %d %d", i, len(bytes), cap(bytes))
 		}
-	}(&d.client)
+	}(&d.rtspClient)
 
-	d.client.OnPacketRTCP = func(c *gortsplib.Client) func(i int, bytes []byte) {
+	d.rtspClient.OnPacketRTCP = func(c *gortsplib.Client) func(i int, bytes []byte) {
 		return func(i int, bytes []byte) {
 			log.Printf("RTCP %d %d %d", i, len(bytes), cap(bytes))
 		}
-	}(&d.client)
+	}(&d.rtspClient)
 
-	if tracks, trackUrl, _, err := d.client.Describe(sourceUrl); err != nil {
-		log.Panicln(err)
-	} else {
-		log.Printf("Tracks: %v", tracks)
-		err := d.client.SetupAndPlay(tracks, trackUrl)
-		if err != nil {
-			log.Panicln(err)
-		}
+	tracks, trackUrl, _, err := d.rtspClient.Describe(sourceUrl)
+	if err != nil {
+		return errors.Annotate(err, "describe")
 	}
+
+	log.Printf("Tracks: %v", tracks)
+	err = d.rtspClient.SetupAndPlay(tracks, trackUrl)
+	if err != nil {
+		return errors.Annotate(err, "setupAndPlay")
+	}
+
 	time.Sleep(5 * time.Second)
 
-	if resp, err := d.client.Pause(); err != nil {
-		log.Panicln(err)
+	if _, err := d.rtspClient.Pause(); err != nil {
+		return errors.Annotate(err, "pause")
+	}
+
+	return nil
+}
+
+func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
+	Logger.Info().Str("url", d.endpoint).Str("action", "run").Msg("device")
+	err := d.ConsumeStream(ctx, a)
+	if err != nil {
+		Logger.Warn().Str("url", d.endpoint).Str("action", "done").Err(err).Msg("device")
 	} else {
-		log.Printf("Pause: %v", resp)
+		Logger.Info().Str("url", d.endpoint).Str("action", "done").Msg("device")
 	}
 }
 
-func (dev *OnVifDevice) Shut() {
+func (d *OnVifDevice) Shut() {
 
 }
 

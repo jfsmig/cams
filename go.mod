@@ -4,8 +4,9 @@ go 1.18
 
 require (
 	github.com/aler9/gortsplib v0.0.0-20220202172728-f2c1b884539d
+	github.com/juju/errors v0.0.0-20220331221717-b38fca44723b
 	github.com/rs/zerolog v1.26.1
-	github.com/use-go/onvif v0.0.2
+	github.com/use-go/onvif v0.0.1
 )
 
 require (

@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"github.com/aler9/gortsplib"
+	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -69,19 +71,39 @@ func (a *LanAgent) RegisterInterface(itf string) {
 	Logger.Info().Str("name", itf).Str("action", "add").Msg("interface")
 }
 
-func (a *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint32, discovered goonvif.Device) {
+func (a *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
+	k := discovered.GetDeviceInfo().SerialNumber
+
 	u := discovered.GetEndpoint("device")
-	if devInPlace, ok := a.devices[u]; ok {
+	Logger.Debug().Str("url", u).Uint32("gen", generation).Str("action", "adding").Msg("device")
+
+	parsedUrl, err := url.Parse(u)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if devInPlace, ok := a.devices[k]; ok {
 		if generation > devInPlace.generation {
 			devInPlace.generation = generation
 		}
+		return nil
 	} else {
+		authenticatedDevice, err := goonvif.NewDevice(goonvif.DeviceParams{
+			Xaddr:    parsedUrl.Host,
+			Username: user,
+			Password: password,
+		})
+		if err != nil {
+			return errors.Trace(err)
+		}
 		transport := gortsplib.TransportUDP
 		dev := &OnVifDevice{
-			generation: generation,
-			onvifURL:   u,
-			dev:        discovered,
-			client: gortsplib.Client{
+			endpoint:    parsedUrl.Host,
+			user:        user,
+			password:    password,
+			generation:  generation,
+			onvifClient: authenticatedDevice,
+			rtspClient: gortsplib.Client{
 				ReadTimeout:           5 * time.Second,
 				WriteTimeout:          5 * time.Second,
 				RedirectDisable:       true,
@@ -90,16 +112,25 @@ func (a *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint32,
 				InitialUDPReadTimeout: 3 * time.Second,
 			},
 		}
-		a.devices[u] = dev
-		Logger.Info().Str("url", u).Str("action", "add").Msg("device")
+		a.devices[k] = dev
+		Logger.Info().
+			Str("key", k).
+			Str("endpoint", u).
+			Str("action", "add").
+			Str("user", dev.user).
+			Str("password", dev.password).
+			Msg("device")
 		go dev.RunLoop(ctx, a)
+		return nil
 	}
 }
 
 func (a *LanAgent) LearnSync(ctx context.Context, gen uint32, discovered []goonvif.Device) {
 	// Update the devices that match the
 	for _, dev := range discovered {
-		a.LearnSingleDeviceSync(ctx, gen, dev)
+		if err := a.LearnSingleDeviceSync(ctx, gen, dev); err != nil {
+			Logger.Warn().Str("url", dev.GetEndpoint("device")).Err(err).Msg("invalid device discovered")
+		}
 	}
 	// Unregister and shut the devices from older generations
 	for k, dev := range a.devices {
