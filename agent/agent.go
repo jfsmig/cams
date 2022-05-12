@@ -5,6 +5,8 @@ import (
 	"github.com/aler9/gortsplib"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
+	"log"
+	"net"
 	"net/url"
 	"sync"
 	"sync/atomic"
@@ -22,29 +24,49 @@ type LanAgent struct {
 
 	devices    map[string]*OnVifDevice
 	interfaces map[string]*LanScanner
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     *sync.WaitGroup
 }
 
-func NewLanAgent() *LanAgent {
+func NewLanAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) *LanAgent {
 	return &LanAgent{
 		ScanPeriod:  time.Minute,
 		CheckPeriod: 30 * time.Second,
 		devices:     make(map[string]*OnVifDevice),
 		interfaces:  make(map[string]*LanScanner),
+
+		ctx:    ctx,
+		cancel: cancel,
+		wg:     wg,
 	}
 }
 
-func (a *LanAgent) RunLoop(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (a *LanAgent) Run() {
+	defer a.wg.Done()
+	defer a.cancel()
 
 	Logger.Info().Str("action", "run").Msg("agent")
+
+	// Discover the local NICs
+	itfs, err := net.Interfaces()
+	if err != nil {
+		log.Panicln(err)
+	}
+	for _, itf := range itfs {
+		if itf.Name != "lo" {
+			a.RegisterInterface(itf.Name)
+		}
+	}
 
 	// Spawn one goroutine per registered interface, for concurrent discoveries
 	fn := func(ctx0 context.Context, gen uint32, devs []goonvif.Device) {
 		a.LearnSync(ctx0, gen, devs)
 	}
 	for _, itf := range a.interfaces {
-		wg.Add(1)
-		go itf.RunLoop(ctx, wg, fn)
+		a.wg.Add(1)
+		go itf.RunLoop(a.ctx, a.wg, fn)
 	}
 
 	// Run the main loop of the agent that interleaves periodical actions
@@ -53,14 +75,14 @@ func (a *LanAgent) RunLoop(ctx context.Context, wg *sync.WaitGroup) {
 	nextCheck := time.After(0)
 	for {
 		select {
-		case <-ctx.Done():
+		case <-a.ctx.Done():
 			Logger.Info().Str("action", "stop").Msg("agent")
 			return
 		case <-nextScan:
-			a.RescanAsync(ctx)
+			a.RescanAsync()
 			nextScan = time.After(a.ScanPeriod)
 		case <-nextCheck:
-			a.CheckSync(ctx)
+			a.CheckSync()
 			nextCheck = time.After(a.CheckPeriod)
 		}
 	}
@@ -141,14 +163,14 @@ func (a *LanAgent) LearnSync(ctx context.Context, gen uint32, discovered []goonv
 	}
 }
 
-func (a *LanAgent) RescanAsync(ctx context.Context) {
+func (a *LanAgent) RescanAsync() {
 	gen := atomic.AddUint32(&a.generation, 1)
 	Logger.Info().Str("action", "rescan").Uint32("gen", gen).Msg("agent")
 	for _, itf := range a.interfaces {
-		itf.RescanAsync(ctx, gen)
+		itf.RescanAsync(a.ctx, gen)
 	}
 }
 
-func (a *LanAgent) CheckSync(ctx context.Context) {
+func (a *LanAgent) CheckSync() {
 	Logger.Info().Str("action", "check").Msg("agent")
 }

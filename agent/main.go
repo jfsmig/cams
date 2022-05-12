@@ -1,11 +1,8 @@
 package main
 
 import (
-	"github.com/rs/zerolog"
-
 	"context"
-	"log"
-	"net"
+	"github.com/rs/zerolog"
 	"os"
 	"sync"
 	"time"
@@ -28,23 +25,21 @@ var (
 	Logger = LoggerContext.Logger()
 )
 
+func run(ctx context.Context, cancel context.CancelFunc) {
+	defer cancel()
+
+	wg := sync.WaitGroup{}
+	upstream := NewUpstreamAgent(ctx, cancel, &wg)
+	agent := NewLanAgent(ctx, cancel, &wg)
+	wg.Add(2)
+	go upstream.Run()
+	go agent.Run()
+	wg.Wait()
+}
+
 func main() {
-	agent := NewLanAgent()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	wg := sync.WaitGroup{}
 
-	itfs, err := net.Interfaces()
-	if err != nil {
-		log.Panicln(err)
-	}
-	for _, itf := range itfs {
-		if itf.Name != "lo" {
-			wg.Add(1)
-			agent.RegisterInterface(itf.Name)
-		}
-	}
-
-	go agent.RunLoop(ctx, &wg)
-	wg.Wait()
+	run(ctx, cancel)
 }

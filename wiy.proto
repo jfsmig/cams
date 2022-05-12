@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+option go_package = ".;proto";
+
+package wiy.proto;
+
+service Registrar {
+  rpc Register(RegisterRequest) returns (RegisterReply) {}
+}
+
+// Stream of commands
+service Collector {
+  rpc Play(stream PlayRequest) returns (stream PlayReply) {}
+  rpc Pause(stream PauseRequest) returns (stream PauseReply) {}
+}
+
+message Status {
+  uint32 code = 1;
+  string status = 2;
+}
+
+message RegisterRequest {
+  StreamId id = 1;
+}
+
+message RegisterReply {
+  Status status = 1;
+}
+
+message StreamId {
+  string user = 1;
+  string stream = 2;
+}
+
+message PlayRequest {
+  string seq = 1;
+  StreamId id = 2;
+}
+
+message PlayReply {
+  Status status = 1;
+  string seq = 2;
+}
+
+message PauseRequest {
+  string seq = 1;
+  StreamId id = 2;
+}
+
+message PauseReply {
+  Status status = 1;
+  string seq = 2;
+}

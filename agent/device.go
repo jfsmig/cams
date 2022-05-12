@@ -7,6 +7,7 @@ import (
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/media"
+	sdk "github.com/use-go/onvif/sdk/media"
 	"github.com/use-go/onvif/xsd/onvif"
 	"log"
 	"strings"
@@ -36,7 +37,7 @@ func (d *OnVifDevice) GetMediaUrl(ctx context.Context) (*base.URL, error) {
 		ProfileToken: onvif.ReferenceToken("000"),
 	}
 
-	mediaUriReply, err := call_GetStreamUri_parse_GetStreamUriResponse(d.onvifClient, request)
+	mediaUriReply, err := sdk.Call_GetStreamUri(ctx, d.onvifClient, request)
 	if err != nil {
 		return nil, errors.Annotate(err, "rpc")
 	}
@@ -115,5 +116,3 @@ func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
 func (d *OnVifDevice) Shut() {
 
 }
-
-//go:generate go run github.com/jfsmig/wiy/cmd/gen-parse GetStreamUriResponse_auto.go main media.GetStreamUri media.GetStreamUriResponse
