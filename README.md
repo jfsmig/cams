@@ -1,6 +1,8 @@
 # WiY  / Watch It Yourself
 
-1. Streaming **devices**, i.e. IP cameras that implement the [OnVif](https://www.onvif.org/) protocol.
+Expose your cameras to a community of trust.
+
+1. Streaming **devices** are present on the field, foster those implementing the [OnVif] standard protocol.
 2. An **agent** is deployed on each site, close to the cameras, i.e. on the same LAN, an agent...
    * carries the credentials of the user 
    * discovers of the devices (if not relying on a static configuration)
@@ -17,19 +19,27 @@
 ## Architecture
 
 The agent:
-* On the LAN side
-  * **Web Service Discovery** of the devices: SOAP messages over Multicast UDP (239.255.255.250:8307)
-  * **OnVif** protocol to control the devices and discover their media streams
-  * **RTSP** over UDP to control the media streams
-  * **RTP/RTSP** over UDP to consume the media streams
-* Toward the Hub
-  * **gRPC** with bi-directional streaming of messages
+* On the LAN side:
+  * [WS Discovery], SOAP messages over Multicast UDP (239.255.255.250:8307)
+  * [OnVif] protocol to control the devices and discover their media streams (HTTP port 8000, XML, SOAP)
+  * [RTSP] over UDP to control the media streams
+  * [RTP] and [RTCP] over UDP to consume the media streams
+* Toward the Hub's Concentrator:
+  * [gRPC] with both uni-directional RPC and bi-directional streaming of messages
+* Toward the Hub's Streamer:
+  * Emit [RTP] and [RTCP]
+
+The Hub Concentrator
+* Toward the agents:
+  * Receives registrations
+  * Emit commands to control the streams: `Play`, `Pause`
+* Toward the Streamer
 
 The Hub
-* Receives registrations
 
 ## Installation guide
 
+### Install [gRPC]
 ```shell
 go mod download
 sudo apt install protobuf-compiler protobuf-compiler-grpc protoc-gen-go
@@ -39,4 +49,18 @@ protoc --go_out=proto --go_opt=paths=source_relative --go-grpc_out=proto --go-gr
 ```
 
 ## References
+* RFC for RTP [rfc3550]
+* RFC for extesnions of RTCP [rfc5760]
+* RFC for RTSP [rfc2326]
+* [OnVif]
+* [gRPC]
 
+[rfc2326]: https://datatracker.ietf.org/doc/html/rfc2326
+[rfc3550]: https://datatracker.ietf.org/doc/html/rfc3550
+[rfc5760]: https://datatracker.ietf.org/doc/html/rfc5760
+[gRPC]: https://grpc.io/
+[OnVif]: https://www.onvif.org/
+[RTP]: https://en.wikipedia.org/wiki/Real-time_Transport_Protocol
+[RTCP]: https://en.wikipedia.org/wiki/RTP_Control_Protocol
+[RTSP]: https://en.wikipedia.org/wiki/Real_Time_Streaming_Protocol
+[WS Discovery]: https://en.wikipedia.org/wiki/Web_Services_Discovery
