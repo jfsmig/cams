@@ -1,6 +1,8 @@
-# WiY  / Watch It Yourself
+# Cam Hub / Watch It Yourself
 
 Expose your cameras to a community of trust.
+
+## Architecture
 
 1. Streaming **devices** are present on the field, foster those implementing the [OnVif] standard protocol.
 2. An **agent** is deployed on each site, close to the cameras, i.e. on the same LAN, an agent...
@@ -15,8 +17,6 @@ Expose your cameras to a community of trust.
    * Authorizes the actions of the users toward the devices
    * Require the agents to Play/Pause media streams 
    * Efficiently Route the media streams from the devices toward the viewers
-
-## Architecture
 
 The agent:
 * On the LAN side:
@@ -39,13 +39,30 @@ The Hub
 
 ## Installation guide
 
-### Install [gRPC]
+First, install the dependencies
 ```shell
-go mod download
+# system deps
 sudo apt install protobuf-compiler protobuf-compiler-grpc protoc-gen-go
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-protoc --go_out=proto --go_opt=paths=source_relative --go-grpc_out=proto --go-grpc_opt=paths=source_relative wiy.proto
+
+# Golang deps
+go mod download
+```
+
+If necessary, refresh the generated code
+```shell
+go generate ./...
+```
+
+Then build all the parts of the Cam Hub system
+```shell
+go install ./...
+```
+
+Then, optionally run the test suite
+```shell
+go test ./...
 ```
 
 ## References
