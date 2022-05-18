@@ -1,4 +1,4 @@
-module github.com/jfsmig/wiy
+module github.com/jfsmig/cams
 
 go 1.18
 
@@ -9,7 +9,6 @@ require (
 	github.com/rs/zerolog v1.26.1
 	github.com/use-go/onvif v0.0.1
 	google.golang.org/grpc v1.46.0
-	google.golang.org/protobuf v1.28.0
 )
 
 require (
@@ -26,6 +25,7 @@ require (
 	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e // indirect
 	golang.org/x/text v0.3.6 // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 )
 
 replace github.com/use-go/onvif => github.com/jfsmig/onvif v0.0.2-0.20220510221409-d203ed011126

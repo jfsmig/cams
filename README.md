@@ -1,4 +1,4 @@
-# Cam Hub / Watch It Yourself
+# Cams / Social Video Network
 
 Expose your cameras to a community of trust.
 

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = ".;proto";
 
-package wiy.proto;
+package cams.proto;
 
 service Registrar {
   rpc Register(RegisterRequest) returns (RegisterReply) {}

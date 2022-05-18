@@ -5,7 +5,7 @@ package main
 import (
 	"crypto/tls"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/jfsmig/wiy/proto"
+	"github.com/jfsmig/cams/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
