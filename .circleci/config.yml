@@ -2,25 +2,29 @@
 # See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
-  say-hello:
-    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
+  build-and-test:
     docker:
-      - image: cimg/base:stable
-    # Add steps to the job
-    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+      - image: cimg/go:1.18
     steps:
       - checkout
       - run:
-          name: "Say hello"
-          command: "echo Hello, World!"
+          name: "Install the system dependencies"
+          command: |
+            sudo apt-get update
+      - run:
+          name: "Install the Golang dependencies"
+          command: |
+            sudo apt-get install --assume-yes --no-install-recommends protobuf-compiler protobuf-compiler-grpc
+            go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+            go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      - run:
+          name: "Code generation"
+          command: |
+            go mod download
+            go generate ./...
 
-# Invoke jobs via workflows
-# See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
-  say-hello-workflow:
+  build-and-test-workflow:
     jobs:
-      - say-hello
+      - build-and-test
