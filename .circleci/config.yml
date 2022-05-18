@@ -12,17 +12,25 @@ jobs:
           name: "Install the system dependencies"
           command: |
             sudo apt-get update
+            sudo apt-get install --assume-yes --no-install-recommends protobuf-compiler protobuf-compiler-grpc
       - run:
           name: "Install the Golang dependencies"
           command: |
-            sudo apt-get install --assume-yes --no-install-recommends protobuf-compiler protobuf-compiler-grpc
             go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
             go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+            go mod download
       - run:
           name: "Code generation"
           command: |
-            go mod download
             go generate ./...
+      - run:
+          name: "Build"
+          command: |
+            go install ./...
+      - run:
+          name: "Unit tests"
+          command: |
+            go test ./...
 
 workflows:
   build-and-test-workflow:
