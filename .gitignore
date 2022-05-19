@@ -1,3 +1,16 @@
+
+### Generated files
+
+**/cams-agent
+**/cams-hub
+
+
+### IDE config files
+.idea/
+
+
+### CMake-related files
+
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
@@ -10,4 +23,3 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 
-.idea/

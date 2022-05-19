@@ -4,15 +4,16 @@ package main
 
 import (
 	"context"
-	"github.com/aler9/gortsplib"
-	"github.com/juju/errors"
-	goonvif "github.com/use-go/onvif"
 	"log"
 	"net"
 	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/aler9/gortsplib"
+	"github.com/juju/errors"
+	goonvif "github.com/use-go/onvif"
 )
 
 type LanAgent struct {
@@ -45,13 +46,8 @@ func NewLanAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGr
 	}
 }
 
-func (a *LanAgent) Run() {
-	defer a.wg.Done()
-	defer a.cancel()
-
-	Logger.Info().Str("action", "run").Msg("agent")
-
-	// Discover the local NICs
+// Discover the local NICs
+func (a *LanAgent) Discover() {
 	itfs, err := net.Interfaces()
 	if err != nil {
 		log.Panicln(err)
@@ -61,6 +57,13 @@ func (a *LanAgent) Run() {
 			a.RegisterInterface(itf.Name)
 		}
 	}
+}
+
+func (a *LanAgent) Run() {
+	defer a.wg.Done()
+	defer a.cancel()
+
+	Logger.Info().Str("action", "run").Msg("agent")
 
 	// Spawn one goroutine per registered interface, for concurrent discoveries
 	fn := func(ctx0 context.Context, gen uint32, devs []goonvif.Device) {

@@ -3,18 +3,18 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"sync"
+	"time"
+
 	"github.com/jfsmig/cams/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
-
-	"context"
-	"sync"
-	"time"
 )
 
 type upstreamAgent struct {
@@ -112,10 +112,10 @@ func (us *connectedUpstreamAgent) runStreamCommands() {
 	//client.Register(us.cnx)
 }
 
-func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, cancel context.CancelFunc) {
+func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, cancel context.CancelFunc, addr string) {
 	defer cancel()
 
-	cnx, err := dialGrpc(ctx, "127.0.0.1:6000")
+	cnx, err := dialGrpc(ctx, addr)
 	if err != nil {
 		Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
 	}
@@ -135,7 +135,7 @@ func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, cancel context.C
 	cus.wg.Wait()
 }
 
-func (us *upstreamAgent) Run() {
+func (us *upstreamAgent) Run(addr string) {
 	defer us.wg.Done()
 	defer us.cancel()
 
@@ -146,7 +146,7 @@ func (us *upstreamAgent) Run() {
 		default:
 			<-time.After(time.Second) // Pause to avoid crazy looping of connection attempts
 			ctxSub, cancelSub := context.WithCancel(us.ctx)
-			us.reconnectAndRerun(ctxSub, cancelSub)
+			us.reconnectAndRerun(ctxSub, cancelSub, addr)
 		}
 	}
 }
