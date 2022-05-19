@@ -37,16 +37,12 @@ func run(ctx context.Context, cancel context.CancelFunc, cfg AgentConfig) error 
 	upstream := NewUpstreamAgent(ctx, cancel, &wg)
 	lan := NewLanAgent(ctx, cancel, &wg)
 
-	lan.Discover()
+	lan.Configure(cfg)
 
-    for _, itf
-	wg.Add(1)
+	wg.Add(2)
 	go upstream.Run(upstreamAddr)
-    for _, itfCfg := range cfg.Interfaces {
-        wg.Add(1)
-        go lan.Run()
-    }
-    wg.Wait()
+	go lan.Run()
+	wg.Wait()
 
 	return nil
 }
@@ -56,11 +52,16 @@ func main() {
 		Use:   "agent",
 		Short: "Cams Agent",
 		Long:  "LAN agent for OnVif cameras",
-		Args:  cobra.MinimumNArgs(1),
+		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			return run(ctx, cancel)
+
+			cfg := AgentConfig{
+				DiscoverPatterns: []string{"*"},
+			}
+
+			return run(ctx, cancel, cfg)
 		},
 	}
 

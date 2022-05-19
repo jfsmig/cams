@@ -2,29 +2,18 @@
 
 package main
 
-
 import (
-	"context"
+	"bytes"
+	"encoding/json"
+	"github.com/juju/errors"
+	"io/ioutil"
 	"os"
-	"sync"
-	"time"
-    "encoding/json"
-
-	"github.com/rs/zerolog"
-	"github.com/spf13/cobra"
+	"strings"
 )
 
-"""
-
-discover wl*
-scan 30s
-cam 127.0.0.2
-uplink 127.0.0.3:6000
-"""
-
 type UpstreamConfig struct {
-	Address string        `json:"address"`
-	Timeout time.Duration `json:"timeout"`
+	Address string `json:"address"`
+	Timeout int64  `json:"timeout"`
 }
 
 type CameraConfig struct {
@@ -33,16 +22,39 @@ type CameraConfig struct {
 	Password string `json:"password,omitempty"`
 }
 
-type InterfaceConfig struct {
-	Name   string `json:"name"`
-}
-
 type AgentConfig struct {
-    DiscoverPatterns []string      `json:"discover"`
-	ScanPeriod       time.Duration `json:"scan_period"`
+	DiscoverPatterns []string `json:"discover"`
+	ScanPeriod       int64    `json:"scan_period"`
+	CheckPeriod      int64    `json:"check_period"`
 
-	Interfaces []InterfaceConfig `json:"interfaces"`
-	Cameras    []CameraConfig    `json:"cameras"`
-	Upstreams  []UpstreamConfig  `json:"upstreams"`
+	Interfaces []string         `json:"interfaces"`
+	Cameras    []CameraConfig   `json:"cameras"`
+	Upstreams  []UpstreamConfig `json:"upstreams"`
 }
 
+func (cfg *AgentConfig) LoadFile(path string) error {
+	if fin, err := os.Open(path); err != nil {
+		return errors.Annotate(err, "open")
+	} else {
+		defer fin.Close()
+		if encoded, err := ioutil.ReadAll(fin); err != nil {
+			return errors.Annotate(err, "read")
+		} else {
+			return cfg.LoadBytes(encoded)
+		}
+	}
+}
+
+func (cfg *AgentConfig) LoadBytes(encoded []byte) error {
+	if err := json.NewDecoder(bytes.NewReader(encoded)).Decode(cfg); err != nil {
+		return errors.Annotate(err, "decode")
+	}
+	return nil
+}
+
+func (cfg *AgentConfig) LoadString(encoded string) error {
+	if err := json.NewDecoder(strings.NewReader(encoded)).Decode(cfg); err != nil {
+		return errors.Annotate(err, "decode")
+	}
+	return nil
+}

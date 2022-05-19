@@ -4,9 +4,9 @@ package main
 
 import (
 	"context"
-	"log"
 	"net"
 	"net/url"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,6 +33,8 @@ type LanAgent struct {
 	wg     *sync.WaitGroup
 }
 
+type DiscoveryFunc func() ([]string, error)
+
 func NewLanAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) *LanAgent {
 	return &LanAgent{
 		ScanPeriod:  time.Minute,
@@ -46,17 +48,69 @@ func NewLanAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGr
 	}
 }
 
-// Discover the local NICs
-func (a *LanAgent) Discover() {
+func (lan *LanAgent) Configure(cfg AgentConfig) {
+	for _, itf := range cfg.Interfaces {
+		lan.RegisterInterface(itf)
+	}
+	if len(cfg.DiscoverPatterns) <= 0 {
+		lan.Discover(cfg.DiscoverPatterns...)
+	}
+	if cfg.CheckPeriod > 0 {
+		lan.CheckPeriod = time.Duration(cfg.CheckPeriod) * time.Second
+	}
+	if cfg.ScanPeriod > 0 {
+		lan.ScanPeriod = time.Duration(cfg.ScanPeriod) * time.Second
+	}
+}
+
+func realDiscovery() ([]string, error) {
+	var out []string
 	itfs, err := net.Interfaces()
 	if err != nil {
-		log.Panicln(err)
+		return nil, err
 	}
 	for _, itf := range itfs {
-		if itf.Name != "lo" {
-			a.RegisterInterface(itf.Name)
+		out = append(out, itf.Name)
+	}
+	return out, nil
+}
+
+// Discover performs a discovery of the local NICs
+func (a *LanAgent) Discover(patterns ...string) error {
+	return a.DiscoverFrom(realDiscovery, patterns...)
+}
+
+// DiscoverFrom does the discovery from the output of a given function.
+// It helps to test the logic.
+func (a *LanAgent) DiscoverFrom(source DiscoveryFunc, patterns ...string) error {
+	itfs, err := source()
+	if err != nil {
+		return err
+	}
+	for _, itf := range itfs {
+		for _, pattern := range patterns {
+			if len(pattern) < 2 {
+				continue
+			}
+			not := pattern[0] == '!'
+			if not {
+				pattern = pattern[1:]
+			}
+			if match, err := regexp.MatchString(pattern, itf); err != nil {
+				Logger.Warn().Err(err).Str("itf", itf).Msg("interface matching")
+			} else if match && !not {
+				a.RegisterInterface(itf)
+			} else {
+				Logger.Info().Str("itf", itf).Msg("interface skipped")
+			}
 		}
 	}
+	return nil
+}
+
+func (a *LanAgent) RegisterInterface(itf string) {
+	a.interfaces[itf] = NewLanScanner(itf)
+	Logger.Info().Str("name", itf).Str("action", "add").Msg("interface")
 }
 
 func (a *LanAgent) Run() {
@@ -91,11 +145,6 @@ func (a *LanAgent) Run() {
 			nextCheck = time.After(a.CheckPeriod)
 		}
 	}
-}
-
-func (a *LanAgent) RegisterInterface(itf string) {
-	a.interfaces[itf] = NewLanScanner(itf)
-	Logger.Info().Str("name", itf).Str("action", "add").Msg("interface")
 }
 
 func (a *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
