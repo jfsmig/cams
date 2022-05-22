@@ -2,67 +2,22 @@
 
 package main
 
-import (
-	"context"
-	"github.com/jfsmig/cams/proto"
-	"github.com/jfsmig/cams/utils"
-	"github.com/juju/errors"
-	"net"
-	"sync"
-)
-
-type Hub struct {
-	proto.UnimplementedRegistrarServer
-	proto.UnimplementedCollectorServer
-
-	config utils.ServerConfig
-
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     *sync.WaitGroup
+type registrarInMem struct {
+	streams map[string]Stream
 }
 
-func NewHub(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) *Hub {
-	reg := &Hub{
-		config: utils.ServerConfig{
-			PathCrt: "",
-			PathKey: "",
-		},
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     wg,
+func NewRegistrarInMem() Registrar {
+	return &registrarInMem{
+		streams: make(map[string]Stream),
 	}
-	return reg
 }
 
-func (reg *Hub) Run(listenAddr string) error {
-	defer reg.cancel()
-	defer reg.wg.Done()
-
-	cnx, err := reg.config.ServeTLS()
-	if err != nil {
-		return err
-	}
-
-	listener, err := net.Listen("", listenAddr)
-	if err != nil {
-		return err
-	}
-
-	proto.RegisterRegistrarServer(cnx, reg)
-	proto.RegisterCollectorServer(cnx, reg)
-
-	return cnx.Serve(listener)
+func (r *registrarInMem) Register(stream Stream) {
+	//TODO implement me
+	panic("implement me")
 }
 
-func (reg *Hub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
-	return nil, errors.NotImplemented
-}
-
-func (reg *Hub) Play(stream proto.Collector_PlayServer) error {
-	return errors.NotImplemented
-}
-
-func (reg *Hub) Pause(stream proto.Collector_PauseServer) error {
-	return errors.NotImplemented
+func (r *registrarInMem) ListById(start string) {
+	//TODO implement me
+	panic("implement me")
 }
