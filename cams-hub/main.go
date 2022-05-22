@@ -9,24 +9,20 @@ import (
 	"sync"
 )
 
-var (
-	user         = "admin"
-	password     = "ollyhgqo"
-	upstreamAddr = "127.0.0.1:6000"
+const (
+	defaultListenAddr = "127.0.0.1:6000"
+	defaultTLSPathCRT = ""
+	defaultTLSPathKey = ""
 )
 
-func run(ctx context.Context, cancel context.CancelFunc, cfg AgentConfig) error {
+func run(ctx context.Context, cancel context.CancelFunc, cfg HubConfig) error {
 	defer cancel()
 
 	wg := sync.WaitGroup{}
-	upstream := NewUpstreamAgent(ctx, cancel, &wg)
-	lan := NewLanAgent(ctx, cancel, &wg)
+	reg := NewHub(ctx, cancel, &wg)
 
-	lan.Configure(cfg)
-
-	wg.Add(2)
-	go upstream.Run(upstreamAddr)
-	go lan.Run()
+	wg.Add(1)
+	go reg.Run(cfg.Listen)
 	wg.Wait()
 
 	return nil
@@ -34,16 +30,20 @@ func run(ctx context.Context, cancel context.CancelFunc, cfg AgentConfig) error 
 
 func main() {
 	cmd := &cobra.Command{
-		Use:   "agent",
-		Short: "Cams Agent",
-		Long:  "LAN agent for OnVif cameras",
+		Use:   "hub",
+		Short: "Cams Hub",
+		Long:  "Hub / Upstream for OnVif cameras Agent",
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			cfg := AgentConfig{
-				DiscoverPatterns: []string{"*"},
+			cfg := HubConfig{
+				Listen: defaultListenAddr,
+				Tls: TLSConfig{
+					defaultTLSPathCRT,
+					defaultTLSPathKey,
+				},
 			}
 
 			return run(ctx, cancel, cfg)

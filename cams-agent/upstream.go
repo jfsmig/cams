@@ -4,17 +4,12 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
+	"github.com/jfsmig/cams/utils"
 	"sync"
 	"time"
 
 	"github.com/jfsmig/cams/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 )
 
 type upstreamAgent struct {
@@ -41,35 +36,6 @@ func NewUpstreamAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.W
 	}
 }
 
-func dialGrpc(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	config := &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
-	options := []grpc_retry.CallOption{
-		grpc_retry.WithCodes(codes.Unavailable),
-		grpc_retry.WithBackoff(
-			grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
-		),
-		grpc_retry.WithMax(5),
-		grpc_retry.WithPerRetryTimeout(1 * time.Second),
-	}
-
-	return grpc.DialContext(ctx, endpoint,
-		grpc.WithTransportCredentials(credentials.NewTLS(config)),
-		grpc.WithUnaryInterceptor(
-			grpc_middleware.ChainUnaryClient(
-				//grpc_prometheus.UnaryClientInterceptor,
-				grpc_retry.UnaryClientInterceptor(options...),
-			)),
-		grpc.WithStreamInterceptor(
-			grpc_middleware.ChainStreamClient(
-				//grpc_prometheus.StreamClientInterceptor,
-				grpc_retry.StreamClientInterceptor(options...),
-			)),
-	)
-}
-
 func (us *connectedUpstreamAgent) runRegistration() {
 	defer us.wg.Done()
 	defer us.cancel()
@@ -87,13 +53,13 @@ func (us *connectedUpstreamAgent) runRegistration() {
 			}
 			inRep, err := client.Register(us.ctx, &inReq)
 			if err != nil {
-				Logger.Warn().
+				utils.Logger.Warn().
 					Str("action", "register").
 					Err(err).
 					Msg("upstream")
 				return
 			} else {
-				Logger.Debug().
+				utils.Logger.Debug().
 					Uint32("status", inRep.Status.Code).
 					Str("msg", inRep.Status.Status).
 					Str("action", "register").
@@ -115,9 +81,9 @@ func (us *connectedUpstreamAgent) runStreamCommands() {
 func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, cancel context.CancelFunc, addr string) {
 	defer cancel()
 
-	cnx, err := dialGrpc(ctx, addr)
+	cnx, err := utils.DialGrpc(ctx, addr)
 	if err != nil {
-		Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
+		utils.Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
 	}
 	defer cnx.Close()
 

@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/cams/utils"
 	goonvif "github.com/use-go/onvif"
 	"sync"
 )
@@ -24,11 +25,11 @@ type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif
 
 func (ls *LanScanner) RunLoop(ctx context.Context, wg *sync.WaitGroup, register RegistrationFunc) {
 	defer wg.Done()
-	Logger.Info().Str("name", ls.ItfName).Str("action", "run").Msg("interface")
+	utils.Logger.Info().Str("name", ls.ItfName).Str("action", "run").Msg("interface")
 	for {
 		select {
 		case <-ctx.Done():
-			Logger.Info().Str("name", ls.ItfName).Str("action", "stop").Msg("interface")
+			utils.Logger.Info().Str("name", ls.ItfName).Str("action", "stop").Msg("interface")
 			close(ls.trigger)
 			return
 		case generation := <-ls.trigger:
@@ -36,7 +37,7 @@ func (ls *LanScanner) RunLoop(ctx context.Context, wg *sync.WaitGroup, register 
 			if err == nil {
 				register(ctx, generation, devices)
 			} else {
-				Logger.Warn().Str("action", "rescan").Err(err).Msg("interface")
+				utils.Logger.Warn().Str("action", "rescan").Err(err).Msg("interface")
 			}
 		}
 	}

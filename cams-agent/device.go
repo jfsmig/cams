@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/base"
+	"github.com/jfsmig/cams/utils"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/media"
@@ -63,7 +64,7 @@ func (d *OnVifDevice) ConsumeStream(ctx context.Context, a *LanAgent) error {
 		return errors.Annotate(err, "getMediaUrl")
 	}
 
-	Logger.Info().Str("host", sourceUrl.Host).Msg("start!")
+	utils.Logger.Info().Str("host", sourceUrl.Host).Msg("start!")
 	if err = d.rtspClient.Start(sourceUrl.Scheme, sourceUrl.Host); err != nil {
 		return errors.Annotate(err, "start")
 	}
@@ -106,12 +107,12 @@ func (d *OnVifDevice) ConsumeStream(ctx context.Context, a *LanAgent) error {
 }
 
 func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
-	Logger.Info().Str("url", d.endpoint).Str("action", "run").Msg("device")
+	utils.Logger.Info().Str("url", d.endpoint).Str("action", "run").Msg("device")
 	err := d.ConsumeStream(ctx, a)
 	if err != nil {
-		Logger.Warn().Str("url", d.endpoint).Str("action", "done").Err(err).Msg("device")
+		utils.Logger.Warn().Str("url", d.endpoint).Str("action", "done").Err(err).Msg("device")
 	} else {
-		Logger.Info().Str("url", d.endpoint).Str("action", "done").Msg("device")
+		utils.Logger.Info().Str("url", d.endpoint).Str("action", "done").Msg("device")
 	}
 }
 
