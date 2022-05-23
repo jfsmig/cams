@@ -2,22 +2,60 @@
 
 package main
 
-type registrarInMem struct {
-	streams map[string]Stream
+import (
+	"github.com/jfsmig/cams/utils"
+	"github.com/juju/errors"
+	"sync"
+	"time"
+)
+
+var (
+	getSliceSize = uint32(100)
+)
+
+type streamRecord struct {
+	StreamRegistration
+	latUpdate time.Time
 }
 
+type registrarInMem struct {
+	streams utils.SortedSet[streamRecord]
+	lock    sync.Mutex
+}
+
+func (sr streamRecord) PK() string { return sr.StreamID }
+
 func NewRegistrarInMem() Registrar {
-	return &registrarInMem{
-		streams: make(map[string]Stream),
+	return &registrarInMem{}
+}
+
+func (r *registrarInMem) Register(stream StreamRegistration) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if sr0 := r.streams.Get(stream.StreamID); sr0 == nil {
+		// First discovery of the stream
+		sr := streamRecord{StreamRegistration: stream, latUpdate: time.Now()}
+		r.streams.Add(&sr)
+		return nil
+	} else if sr0.User != stream.User {
+		return errors.New("device existing for another user")
+	} else {
+		sr0.latUpdate = time.Now()
+		return nil
 	}
 }
 
-func (r *registrarInMem) Register(stream Stream) {
-	//TODO implement me
-	panic("implement me")
-}
+func (r *registrarInMem) ListById(start string) ([]StreamRecord, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
-func (r *registrarInMem) ListById(start string) {
-	//TODO implement me
-	panic("implement me")
+	out := make([]StreamRecord, 0, getSliceSize)
+	for _, sr := range r.streams.Slice(start, getSliceSize) {
+		out = append(out, StreamRecord{
+			StreamID: sr.StreamID,
+			User:     sr.User,
+		})
+	}
+	return out, nil
 }

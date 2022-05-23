@@ -18,11 +18,13 @@ const (
 func run(ctx context.Context, cancel context.CancelFunc, cfg HubConfig) error {
 	defer cancel()
 
+	reg := NewRegistrarInMem()
+
 	wg := sync.WaitGroup{}
-	reg := NewHub(ctx, cancel, &wg)
+	hub := NewHub(ctx, cancel, &wg)
 
 	wg.Add(1)
-	go reg.Run(cfg.Listen)
+	go hub.Run(cfg.Listen, reg)
 	wg.Wait()
 
 	return nil

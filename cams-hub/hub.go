@@ -25,12 +25,17 @@ type Hub struct {
 }
 
 type Registrar interface {
-	Register(stream Stream)
+	Register(stream StreamRegistration) error
 
-	ListById(start string)
+	ListById(start string) ([]StreamRecord, error)
 }
 
-type Stream struct {
+type StreamRecord struct {
+	StreamID string
+	User     string
+}
+
+type StreamRegistration struct {
 	StreamID string
 	User     string
 }
@@ -48,11 +53,11 @@ func NewHub(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) 
 	return reg
 }
 
-func (reg *Hub) Run(listenAddr string) error {
-	defer reg.cancel()
-	defer reg.wg.Done()
+func (hub *Hub) Run(listenAddr string, reg Registrar) error {
+	defer hub.cancel()
+	defer hub.wg.Done()
 
-	cnx, err := reg.config.ServeTLS()
+	cnx, err := hub.config.ServeTLS()
 	if err != nil {
 		return err
 	}
@@ -62,20 +67,21 @@ func (reg *Hub) Run(listenAddr string) error {
 		return err
 	}
 
-	proto.RegisterRegistrarServer(cnx, reg)
-	proto.RegisterCollectorServer(cnx, reg)
+	proto.RegisterRegistrarServer(cnx, hub)
+	proto.RegisterCollectorServer(cnx, hub)
 
+	hub.registrar = reg
 	return cnx.Serve(listener)
 }
 
-func (reg *Hub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
+func (hub *Hub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
 	return nil, errors.NotImplemented
 }
 
-func (reg *Hub) Play(stream proto.Collector_PlayServer) error {
+func (hub *Hub) Play(stream proto.Collector_PlayServer) error {
 	return errors.NotImplemented
 }
 
-func (reg *Hub) Pause(stream proto.Collector_PauseServer) error {
+func (hub *Hub) Pause(stream proto.Collector_PauseServer) error {
 	return errors.NotImplemented
 }
