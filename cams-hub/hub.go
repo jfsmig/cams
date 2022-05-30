@@ -6,14 +6,16 @@ import (
 	"context"
 	"github.com/jfsmig/cams/proto"
 	"github.com/jfsmig/cams/utils"
-	"github.com/juju/errors"
+	"github.com/jfsmig/go-bags"
 	"net"
 	"sync"
 )
 
+type StreamID string
+
 type Hub struct {
 	proto.UnimplementedRegistrarServer
-	proto.UnimplementedCollectorServer
+	proto.UnimplementedControllerServer
 
 	config utils.ServerConfig
 
@@ -21,7 +23,11 @@ type Hub struct {
 	cancel context.CancelFunc
 	wg     *sync.WaitGroup
 
+	// Gathers the known streams
 	registrar Registrar
+
+	// Gather the established connections to agent on the field
+	agent bags.SortedObj[string, AgentController]
 }
 
 type Registrar interface {
@@ -68,20 +74,27 @@ func (hub *Hub) Run(listenAddr string, reg Registrar) error {
 	}
 
 	proto.RegisterRegistrarServer(cnx, hub)
-	proto.RegisterCollectorServer(cnx, hub)
+	proto.RegisterControllerServer(cnx, hub)
 
 	hub.registrar = reg
 	return cnx.Serve(listener)
 }
 
 func (hub *Hub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
-	return nil, errors.NotImplemented
+	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.Stream})
+	return &proto.RegisterReply{
+		Status: &proto.Status{Code: 202, Status: "registered"},
+	}, err
 }
 
-func (hub *Hub) Play(stream proto.Collector_PlayServer) error {
-	return errors.NotImplemented
+func (hub *Hub) Control(stream proto.Controller_ControlServer) error {
+	agent := NewAgenController(stream)
+	agent.Run()
+	return nil
 }
 
-func (hub *Hub) Pause(stream proto.Collector_PauseServer) error {
-	return errors.NotImplemented
+func (hub *Hub) Media(stream proto.Controller_MediaServer) error {
+	agent := NewStreamPlayer(stream)
+	agent.Run()
+	return nil
 }

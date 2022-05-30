@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/jfsmig/cams/utils"
+	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
 	"sync"
 	"time"
@@ -19,7 +19,7 @@ type streamRecord struct {
 }
 
 type registrarInMem struct {
-	streams utils.SortedSet[streamRecord]
+	streams bags.SortedObj[string, *streamRecord]
 	lock    sync.Mutex
 }
 
@@ -33,7 +33,7 @@ func (r *registrarInMem) Register(stream StreamRegistration) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	if sr0 := r.streams.Get(stream.StreamID); sr0 == nil {
+	if sr0, ok := r.streams.Get(stream.StreamID); !ok {
 		// First discovery of the stream
 		sr := streamRecord{StreamRegistration: stream, latUpdate: time.Now()}
 		r.streams.Add(&sr)

@@ -9,10 +9,11 @@ service Registrar {
 }
 
 // Stream of commands
-service Collector {
-  rpc Play(stream PlayRequest) returns (stream PlayReply) {}
-  rpc Pause(stream PauseRequest) returns (stream PauseReply) {}
+service Controller {
+  rpc Control(stream ControlReply) returns (stream ControlRequest) {}
+  rpc Media(stream MediaFrame) returns (MediaReply) {}
 }
+
 
 message Status {
   uint32 code = 1;
@@ -32,22 +33,33 @@ message StreamId {
   string stream = 2;
 }
 
-message PlayRequest {
-  string seq = 1;
-  StreamId id = 2;
+enum Action {
+  UNSET = 0;
+  PLAY = 1;
+  STOP = 2;
 }
 
-message PlayReply {
-  Status status = 1;
-  string seq = 2;
+message ControlReply {
+  StreamId id = 1;
+  uint64 seq = 2;
+  Banner banner = 3;
+  Status status = 4;
 }
 
-message PauseRequest {
-  string seq = 1;
-  StreamId id = 2;
+message Banner {
+  string token = 1;
 }
 
-message PauseReply {
-  Status status = 1;
-  string seq = 2;
+message ControlRequest {
+  uint64 seq = 2;
+  Action action = 3;
+}
+
+message MediaFrame {
+  bytes payload = 1;
+}
+
+message MediaReply {
+  StreamId id = 1;
+  Status status = 2;
 }
