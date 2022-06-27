@@ -17,8 +17,9 @@ import (
 )
 
 type ServerConfig struct {
-	PathCrt string
-	PathKey string
+	ListenAddr string
+	PathCrt    string
+	PathKey    string
 }
 
 func (srv *ServerConfig) ServeTLS() (*grpc.Server, error) {

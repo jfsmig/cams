@@ -3,34 +3,23 @@
 package main
 
 import (
-	"github.com/jfsmig/cams/proto"
+	"context"
+	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
 )
 
-type StreamPlayer interface {
-	PK() string
-	Stop() error
-	Run() error
+type localStreamSwitch struct {
+	sources bags.SortedObj[string, StreamSource]
 }
 
-func NewStreamPlayer(proto.Controller_MediaServer) StreamPlayer {
-	return &localStreamEndpoint{}
+func NewStreamPlayer() StreamPlayer {
+	return &localStreamSwitch{}
 }
 
-type localStreamEndpoint struct {
-	streamID StreamID
-	input    proto.Controller_MediaServer
-	stop     chan bool
-}
-
-func (ep *localStreamEndpoint) PK() string {
-	return string(ep.streamID)
-}
-
-func (ep *localStreamEndpoint) Stop() error {
+func (ls *localStreamSwitch) Run(ctx context.Context) error {
 	return errors.NotImplemented
 }
 
-func (ep *localStreamEndpoint) Run() error {
+func (ls *localStreamSwitch) Register(src StreamSource) error {
 	return errors.NotImplemented
 }

@@ -4,15 +4,21 @@ option go_package = ".;proto";
 
 package cams.proto;
 
+
+
 service Registrar {
   rpc Register(RegisterRequest) returns (RegisterReply) {}
 }
 
-// Stream of commands
 service Controller {
+  // Stream of commands from the server to the client
   rpc Control(stream ControlReply) returns (stream ControlRequest) {}
+}
+
+service StreamPlayer {
   rpc Media(stream MediaFrame) returns (MediaReply) {}
 }
+
 
 
 message Status {

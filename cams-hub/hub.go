@@ -13,9 +13,15 @@ import (
 
 type StreamID string
 
-type Hub struct {
+type TLSConfig struct {
+	PathCrt string `json:"crt"`
+	PathKey string `json:"key"`
+}
+
+type grpcHub struct {
 	proto.UnimplementedRegistrarServer
 	proto.UnimplementedControllerServer
+	proto.UnimplementedStreamPlayerServer
 
 	config utils.ServerConfig
 
@@ -25,76 +31,53 @@ type Hub struct {
 
 	// Gathers the known streams
 	registrar Registrar
+	player    StreamPlayer
 
 	// Gather the established connections to agent on the field
 	agent bags.SortedObj[string, AgentController]
 }
 
-type Registrar interface {
-	Register(stream StreamRegistration) error
-
-	ListById(start string) ([]StreamRecord, error)
-}
-
-type StreamRecord struct {
-	StreamID string
-	User     string
-}
-
-type StreamRegistration struct {
-	StreamID string
-	User     string
-}
-
-func NewHub(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) *Hub {
-	reg := &Hub{
-		config: utils.ServerConfig{
-			PathCrt: "",
-			PathKey: "",
-		},
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     wg,
+func runHub(ctx context.Context, config utils.ServerConfig) error {
+	hub := &grpcHub{
+		config: config,
 	}
-	return reg
-}
-
-func (hub *Hub) Run(listenAddr string, reg Registrar) error {
-	defer hub.cancel()
-	defer hub.wg.Done()
 
 	cnx, err := hub.config.ServeTLS()
 	if err != nil {
 		return err
 	}
 
-	listener, err := net.Listen("", listenAddr)
+	listener, err := net.Listen("", hub.config.ListenAddr)
 	if err != nil {
 		return err
 	}
 
 	proto.RegisterRegistrarServer(cnx, hub)
 	proto.RegisterControllerServer(cnx, hub)
+	proto.RegisterStreamPlayerServer(cnx, hub)
 
-	hub.registrar = reg
+	hub.registrar = NewRegistrarInMem()
+	hub.player = NewStreamPlayer()
+
 	return cnx.Serve(listener)
 }
 
-func (hub *Hub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
+func (hub *grpcHub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
 	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.Stream})
 	return &proto.RegisterReply{
 		Status: &proto.Status{Code: 202, Status: "registered"},
 	}, err
 }
 
-func (hub *Hub) Control(stream proto.Controller_ControlServer) error {
+func (hub *grpcHub) Control(stream proto.Controller_ControlServer) error {
 	agent := NewAgenController(stream)
-	agent.Run()
-	return nil
+	return agent.Run()
 }
 
-func (hub *Hub) Media(stream proto.Controller_MediaServer) error {
-	agent := NewStreamPlayer(stream)
-	agent.Run()
-	return nil
+func (hub *grpcHub) Media(stream proto.StreamPlayer_MediaServer) error {
+	src := NewStreamSource(stream)
+	hub.player.Register(src)
+	defer hub.player.Unregister(src)
+
+	return src.Run()
 }

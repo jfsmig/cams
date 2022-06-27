@@ -108,8 +108,8 @@ var Registrar_ServiceDesc = grpc.ServiceDesc{
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ControllerClient interface {
+	// Stream of commands from the server to the client
 	Control(ctx context.Context, opts ...grpc.CallOption) (Controller_ControlClient, error)
-	Media(ctx context.Context, opts ...grpc.CallOption) (Controller_MediaClient, error)
 }
 
 type controllerClient struct {
@@ -151,46 +151,12 @@ func (x *controllerControlClient) Recv() (*ControlRequest, error) {
 	return m, nil
 }
 
-func (c *controllerClient) Media(ctx context.Context, opts ...grpc.CallOption) (Controller_MediaClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Controller_ServiceDesc.Streams[1], "/cams.proto.Controller/Media", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &controllerMediaClient{stream}
-	return x, nil
-}
-
-type Controller_MediaClient interface {
-	Send(*MediaFrame) error
-	CloseAndRecv() (*MediaReply, error)
-	grpc.ClientStream
-}
-
-type controllerMediaClient struct {
-	grpc.ClientStream
-}
-
-func (x *controllerMediaClient) Send(m *MediaFrame) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *controllerMediaClient) CloseAndRecv() (*MediaReply, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(MediaReply)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // ControllerServer is the server API for Controller service.
 // All implementations must embed UnimplementedControllerServer
 // for forward compatibility
 type ControllerServer interface {
+	// Stream of commands from the server to the client
 	Control(Controller_ControlServer) error
-	Media(Controller_MediaServer) error
 	mustEmbedUnimplementedControllerServer()
 }
 
@@ -200,9 +166,6 @@ type UnimplementedControllerServer struct {
 
 func (UnimplementedControllerServer) Control(Controller_ControlServer) error {
 	return status.Errorf(codes.Unimplemented, "method Control not implemented")
-}
-func (UnimplementedControllerServer) Media(Controller_MediaServer) error {
-	return status.Errorf(codes.Unimplemented, "method Media not implemented")
 }
 func (UnimplementedControllerServer) mustEmbedUnimplementedControllerServer() {}
 
@@ -243,32 +206,6 @@ func (x *controllerControlServer) Recv() (*ControlReply, error) {
 	return m, nil
 }
 
-func _Controller_Media_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ControllerServer).Media(&controllerMediaServer{stream})
-}
-
-type Controller_MediaServer interface {
-	SendAndClose(*MediaReply) error
-	Recv() (*MediaFrame, error)
-	grpc.ServerStream
-}
-
-type controllerMediaServer struct {
-	grpc.ServerStream
-}
-
-func (x *controllerMediaServer) SendAndClose(m *MediaReply) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *controllerMediaServer) Recv() (*MediaFrame, error) {
-	m := new(MediaFrame)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // Controller_ServiceDesc is the grpc.ServiceDesc for Controller service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -283,9 +220,124 @@ var Controller_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 			ClientStreams: true,
 		},
+	},
+	Metadata: "hub.proto",
+}
+
+// StreamPlayerClient is the client API for StreamPlayer service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type StreamPlayerClient interface {
+	Media(ctx context.Context, opts ...grpc.CallOption) (StreamPlayer_MediaClient, error)
+}
+
+type streamPlayerClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewStreamPlayerClient(cc grpc.ClientConnInterface) StreamPlayerClient {
+	return &streamPlayerClient{cc}
+}
+
+func (c *streamPlayerClient) Media(ctx context.Context, opts ...grpc.CallOption) (StreamPlayer_MediaClient, error) {
+	stream, err := c.cc.NewStream(ctx, &StreamPlayer_ServiceDesc.Streams[0], "/cams.proto.StreamPlayer/Media", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &streamPlayerMediaClient{stream}
+	return x, nil
+}
+
+type StreamPlayer_MediaClient interface {
+	Send(*MediaFrame) error
+	CloseAndRecv() (*MediaReply, error)
+	grpc.ClientStream
+}
+
+type streamPlayerMediaClient struct {
+	grpc.ClientStream
+}
+
+func (x *streamPlayerMediaClient) Send(m *MediaFrame) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *streamPlayerMediaClient) CloseAndRecv() (*MediaReply, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(MediaReply)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// StreamPlayerServer is the server API for StreamPlayer service.
+// All implementations must embed UnimplementedStreamPlayerServer
+// for forward compatibility
+type StreamPlayerServer interface {
+	Media(StreamPlayer_MediaServer) error
+	mustEmbedUnimplementedStreamPlayerServer()
+}
+
+// UnimplementedStreamPlayerServer must be embedded to have forward compatible implementations.
+type UnimplementedStreamPlayerServer struct {
+}
+
+func (UnimplementedStreamPlayerServer) Media(StreamPlayer_MediaServer) error {
+	return status.Errorf(codes.Unimplemented, "method Media not implemented")
+}
+func (UnimplementedStreamPlayerServer) mustEmbedUnimplementedStreamPlayerServer() {}
+
+// UnsafeStreamPlayerServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to StreamPlayerServer will
+// result in compilation errors.
+type UnsafeStreamPlayerServer interface {
+	mustEmbedUnimplementedStreamPlayerServer()
+}
+
+func RegisterStreamPlayerServer(s grpc.ServiceRegistrar, srv StreamPlayerServer) {
+	s.RegisterService(&StreamPlayer_ServiceDesc, srv)
+}
+
+func _StreamPlayer_Media_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(StreamPlayerServer).Media(&streamPlayerMediaServer{stream})
+}
+
+type StreamPlayer_MediaServer interface {
+	SendAndClose(*MediaReply) error
+	Recv() (*MediaFrame, error)
+	grpc.ServerStream
+}
+
+type streamPlayerMediaServer struct {
+	grpc.ServerStream
+}
+
+func (x *streamPlayerMediaServer) SendAndClose(m *MediaReply) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *streamPlayerMediaServer) Recv() (*MediaFrame, error) {
+	m := new(MediaFrame)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// StreamPlayer_ServiceDesc is the grpc.ServiceDesc for StreamPlayer service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var StreamPlayer_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cams.proto.StreamPlayer",
+	HandlerType: (*StreamPlayerServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Media",
-			Handler:       _Controller_Media_Handler,
+			Handler:       _StreamPlayer_Media_Handler,
 			ClientStreams: true,
 		},
 	},

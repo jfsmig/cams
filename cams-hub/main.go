@@ -15,19 +15,12 @@ const (
 	defaultTLSPathKey = ""
 )
 
-func run(ctx context.Context, cancel context.CancelFunc, cfg HubConfig) error {
+type runnable func(ctx context.Context) error
+
+func runChild(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, cb runnable) error {
 	defer cancel()
-
-	reg := NewRegistrarInMem()
-
-	wg := sync.WaitGroup{}
-	hub := NewHub(ctx, cancel, &wg)
-
-	wg.Add(1)
-	go hub.Run(cfg.Listen, reg)
-	wg.Wait()
-
-	return nil
+	defer wg.Done()
+	return cb(ctx)
 }
 
 func main() {
@@ -40,15 +33,13 @@ func main() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			cfg := HubConfig{
-				Listen: defaultListenAddr,
-				Tls: TLSConfig{
-					defaultTLSPathCRT,
-					defaultTLSPathKey,
-				},
+			cfg := utils.ServerConfig{
+				ListenAddr: defaultListenAddr,
+				PathCrt:    defaultTLSPathCRT,
+				PathKey:    defaultTLSPathKey,
 			}
 
-			return run(ctx, cancel, cfg)
+			return runHub(ctx, cfg)
 		},
 	}
 
