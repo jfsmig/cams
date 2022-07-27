@@ -3,112 +3,82 @@
 package main
 
 import (
-	"context"
 	"github.com/jfsmig/cams/proto"
+	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
-	"github.com/qmuntal/stateless"
-	"io"
 	"strings"
+	"sync"
 )
 
 const (
-	stateInit    = "init"
-	stateIdle    = "idle"
-	stateReady   = "ready"
-	stateCommand = "cmd"
+	CommandPlay = "play"
+	CommandStop = "stop"
+	CommandExit = "exit"
 )
 
-const (
-	triggerStart  = "start"
-	triggerBanner = "banner"
-	triggerReply  = "reply"
-)
-
-type AgentController interface {
-	// PK makes the object sortable
-	PK() string
-
-	// Play Asks the remote agent to start playing a media stream
-	Play(streamID string) error
-
-	// Stop asks the remote agent to stop playing a media stream.
-	//      The stream itself SHOULD NOT be immediately closed on
-	//      the server side
-	Stop(streamID string) error
-
-	// Run executes the goroutine that makes the remote agent alive
-	//     on the server
-	Run() error
-}
-
-type agentTwin struct {
-	streamID   StreamID
-	fsm        *stateless.StateMachine
-	requests   chan string
+type AgentTwin struct {
+	agentID    AgentID
 	downstream proto.Controller_ControlServer
+
+	// Control commands sent to the agent twin by the system
+	requests chan string
+
+	// notifications of terminated media goroutines
+	terminations chan StreamID
+
+	mediasLock      sync.Mutex
+	mediasWaitGroup sync.WaitGroup
+	medias          bags.SortedObj[StreamID, *agentStream]
 }
 
-func NewAgenController(stream proto.Controller_ControlServer) AgentController {
-	agent := agentTwin{}
-	agent.fsm = stateless.NewStateMachine(stateInit)
+type agentStream struct {
+	streamID   StreamID
+	downstream proto.Controller_MediaUploadServer
+}
+
+func NewAgentTwin(id AgentID, stream proto.Controller_ControlServer) *AgentTwin {
+	agent := AgentTwin{}
+	agent.agentID = id
 	agent.downstream = stream
-	agent.requests = make(chan string, 32)
-
-	agent.fsm.Configure(stateInit).
-		Permit(triggerStart, stateIdle)
-
-	agent.fsm.Configure(stateIdle).
-		OnActive(func(_ context.Context) error {
-			// TODO(jfs): consume the banner
-			_, err := agent.downstream.Recv()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return nil
-				}
-				return errors.Annotate(err, "stream read")
-			} else {
-
-			}
-			return nil
-		}).
-		Permit(triggerBanner, stateReady)
-
-	agent.fsm.Configure(stateReady).
-		OnActive(func(_ context.Context) error {
-			// TODO(jfs): consume the request channels
-			return nil
-		}).
-		Permit(triggerBanner, stateReady)
-
-	agent.fsm.Configure(stateCommand).
-		Permit(triggerReply, stateReady)
-
+	agent.requests = make(chan string, 1)
+	agent.terminations = make(chan StreamID, 32)
 	return &agent
 }
 
-func _command(action string, streamID string) string {
+func _command(action string, agentToken string, args ...string) string {
 	sb := strings.Builder{}
 	sb.WriteString(action)
 	sb.WriteRune(' ')
-	sb.WriteString(streamID)
+	sb.WriteString(agentToken)
+	for _, arg := range args {
+		sb.WriteRune(' ')
+		sb.WriteString(arg)
+	}
 	return sb.String()
 }
 
-func (agent *agentTwin) Play(streamID string) error {
-	agent.requests <- _command("play", streamID)
+func (agent *AgentTwin) Play(streamID string) error {
+	agent.requests <- _command(CommandPlay, string(agent.PK()), streamID)
 	return nil
 }
 
-func (agent *agentTwin) Stop(streamID string) error {
-	agent.requests <- _command("stop", streamID)
+func (agent *AgentTwin) Stop(streamID string) error {
+	agent.requests <- _command(CommandStop, string(agent.PK()), streamID)
 	return nil
 }
 
-func (agent *agentTwin) Run() error {
-	agent.fsm.Fire(triggerStart)
-	return nil
+func (agent *AgentTwin) Exit() {
+	agent.requests <- _command(CommandExit, string(agent.PK()))
 }
 
-func (agent *agentTwin) PK() string {
-	return string(agent.streamID)
+func (agent *AgentTwin) PK() AgentID {
+	return agent.agentID
+}
+
+func (as *agentStream) PK() StreamID {
+	return as.streamID
+}
+
+func (as *agentStream) Exit() error {
+	return errors.NotImplemented
 }

@@ -7,10 +7,16 @@ import (
 	"github.com/jfsmig/cams/proto"
 	"github.com/jfsmig/cams/utils"
 	"github.com/jfsmig/go-bags"
+	"github.com/juju/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"io"
 	"net"
+	"strings"
 	"sync"
 )
 
+type AgentID string
 type StreamID string
 
 type TLSConfig struct {
@@ -21,7 +27,7 @@ type TLSConfig struct {
 type grpcHub struct {
 	proto.UnimplementedRegistrarServer
 	proto.UnimplementedControllerServer
-	proto.UnimplementedStreamPlayerServer
+	proto.UnimplementedConsumerServer
 
 	config utils.ServerConfig
 
@@ -31,10 +37,9 @@ type grpcHub struct {
 
 	// Gathers the known streams
 	registrar Registrar
-	player    StreamPlayer
 
 	// Gather the established connections to agent on the field
-	agent bags.SortedObj[string, AgentController]
+	agent bags.SortedObj[AgentID, *AgentTwin]
 }
 
 func runHub(ctx context.Context, config utils.ServerConfig) error {
@@ -54,10 +59,9 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 
 	proto.RegisterRegistrarServer(cnx, hub)
 	proto.RegisterControllerServer(cnx, hub)
-	proto.RegisterStreamPlayerServer(cnx, hub)
+	proto.RegisterConsumerServer(cnx, hub)
 
 	hub.registrar = NewRegistrarInMem()
-	hub.player = NewStreamPlayer()
 
 	return cnx.Serve(listener)
 }
@@ -70,14 +74,87 @@ func (hub *grpcHub) Register(ctx context.Context, req *proto.RegisterRequest) (*
 }
 
 func (hub *grpcHub) Control(stream proto.Controller_ControlServer) error {
-	agent := NewAgenController(stream)
-	return agent.Run()
+	// Consume the banner
+	banner, err := stream.Recv()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return errors.Annotate(err, "stream read")
+	}
+
+	// locate the agent is any
+	if banner.GetBanner() == nil {
+		return status.Error(codes.InvalidArgument, "expected banner")
+	}
+	user := banner.GetBanner().GetUser()
+	if hub.agent.Has(AgentID(user)) {
+		return status.Error(codes.AlreadyExists, "agent known")
+	}
+
+	agent := NewAgentTwin(AgentID(user), stream)
+
+	// wait for commands from outside, to propagate to the agent
+	for running := true; running; {
+		select {
+		case cmd := <-agent.requests:
+			tokens := strings.Split(cmd, " ")
+			switch tokens[0] {
+			case CommandPlay: // Play a stream
+			case CommandStop: // Stop a stream
+			case CommandExit: // abort the
+				running = false
+			}
+		case done := <-agent.terminations:
+			agent.medias.Remove(done)
+			utils.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("terminated")
+		}
+	}
+
+	// Close all the media streams
+	for _, media := range agent.medias {
+		media.Exit()
+	}
+	agent.mediasWaitGroup.Wait()
+
+	// Close the command channel
+	close(agent.requests)
+
+	// Unregister the AgentTwin
+	hub.agent.Remove(AgentID(user))
+
+	if err == nil {
+		return nil
+	}
+	return status.Error(codes.Aborted, "An error occured")
 }
 
-func (hub *grpcHub) Media(stream proto.StreamPlayer_MediaServer) error {
-	src := NewStreamSource(stream)
-	hub.player.Register(src)
-	defer hub.player.Unregister(src)
+// An upload is starting.
+// A banner is expected from the stream with the ID of the user and the ID of the stream
+// Since the agent must wait for the PLAY command, there must be an expectation for that
+func (hub *grpcHub) MediaUpload(stream proto.Controller_MediaUploadServer) error {
+	msg, err := stream.Recv()
+	if err != nil {
+		return err
+	}
+	if msg.GetBanner() == nil {
+		return status.Error(codes.InvalidArgument, "expected banner")
+	}
 
-	return src.Run()
+	agent, ok := hub.agent.Get(AgentID(msg.GetBanner().GetUser()))
+	if !ok {
+		return status.Error(codes.NotFound, "no such agent")
+	}
+
+	agent.mediasLock.Lock()
+	defer agent.mediasLock.Unlock()
+	if agent.medias.Has(StreamID(msg.GetBanner().GetStream())) {
+		return status.Error(codes.AlreadyExists, "stream found")
+	}
+
+	return status.Error(codes.Unimplemented, "NYI")
+}
+
+func (hub *grpcHub) Play(id *proto.StreamId, req proto.Consumer_PlayServer) error {
+	return status.Error(codes.Unimplemented, "NYI")
 }
