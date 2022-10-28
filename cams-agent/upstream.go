@@ -5,81 +5,29 @@ package main
 import (
 	"context"
 	"github.com/jfsmig/cams/utils"
+	"google.golang.org/grpc"
 	"sync"
 	"time"
 
+	"github.com/aler9/gortsplib"
 	"github.com/jfsmig/cams/proto"
-	"google.golang.org/grpc"
 )
 
-type upstreamAgent struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     *sync.WaitGroup
+func RunUpstreamAgent(ctx context.Context, addr string) {
+	for ctx.Err() != nil {
+		<-time.After(time.Second) // Pause to avoid crazy looping of connection attempts
+		reconnectAndRerun(ctx, addr)
+	}
 }
 
 type connectedUpstreamAgent struct {
-	upstream *upstreamAgent
-
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-
 	cnx *grpc.ClientConn
 }
 
-func NewUpstreamAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) *upstreamAgent {
-	return &upstreamAgent{
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     wg,
-	}
-}
-
-func (us *connectedUpstreamAgent) runRegistration() {
-	defer us.wg.Done()
-	defer us.cancel()
-
-	ticker := time.Tick(1 * time.Second)
-
-	client := proto.NewRegistrarClient(us.cnx)
-	for {
-		select {
-		case <-us.ctx.Done():
-			return
-		case <-ticker:
-			inReq := proto.RegisterRequest{
-				Id: &proto.StreamId{},
-			}
-			inRep, err := client.Register(us.ctx, &inReq)
-			if err != nil {
-				utils.Logger.Warn().
-					Str("action", "register").
-					Err(err).
-					Msg("upstream")
-				return
-			} else {
-				utils.Logger.Debug().
-					Uint32("status", inRep.Status.Code).
-					Str("msg", inRep.Status.Status).
-					Str("action", "register").
-					Msg("upstream")
-			}
-		}
-	}
-	//client.Register(us.cnx)
-}
-
-func (us *connectedUpstreamAgent) runStreamCommands() {
-	defer us.wg.Done()
-	defer us.cancel()
-
-	//client := proto.NewCollectorClient(us.cnx)
-	//client.Register(us.cnx)
-}
-
-func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, cancel context.CancelFunc, addr string) {
+func reconnectAndRerun(ctx0 context.Context, addr string) {
+	ctx, cancel := context.WithCancel(ctx0)
 	defer cancel()
+	wg := sync.WaitGroup{}
 
 	cnx, err := utils.DialGrpc(ctx, addr)
 	if err != nil {
@@ -88,31 +36,94 @@ func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, cancel context.C
 	defer cnx.Close()
 
 	cus := connectedUpstreamAgent{
-		upstream: us,
-		cnx:      cnx,
-		wg:       sync.WaitGroup{},
-		ctx:      ctx,
-		cancel:   cancel,
+		cnx: cnx,
 	}
 
-	cus.wg.Add(2)
-	go cus.runRegistration()
-	go cus.runStreamCommands()
-	cus.wg.Wait()
+	wg.Add(3)
+	go swarmRun(ctx, cancel, &wg, func(c context.Context) { cus.runRegistration(c) })
+	go swarmRun(ctx, cancel, &wg, func(c context.Context) { cus.runControl(c) })
+	go swarmRun(ctx, cancel, &wg, func(c context.Context) { cus.runStream(c) })
+	wg.Wait()
 }
 
-func (us *upstreamAgent) Run(addr string) {
-	defer us.wg.Done()
-	defer us.cancel()
+// runRegistration periodically registers the streams found on the cams that
+// have been discovered on the LAN.
+func (us *connectedUpstreamAgent) runRegistration(ctx context.Context) {
+	ticker := time.Tick(1 * time.Second)
 
+	client := proto.NewRegistrarClient(us.cnx)
 	for {
 		select {
-		case <-us.ctx.Done():
+		case <-ctx.Done():
 			return
-		default:
-			<-time.After(time.Second) // Pause to avoid crazy looping of connection attempts
-			ctxSub, cancelSub := context.WithCancel(us.ctx)
-			us.reconnectAndRerun(ctxSub, cancelSub, addr)
+		case <-ticker:
+			inReq := proto.RegisterRequest{
+				Id: &proto.StreamId{},
+			}
+			inRep, err := client.Register(ctx, &inReq)
+			if err != nil {
+				utils.Logger.Warn().Str("action", "register").Err(err).Msg("register")
+				return
+			} else {
+				utils.Logger.Debug().
+					Uint32("status", inRep.Status.Code).
+					Str("msg", inRep.Status.Status).
+					Str("action", "do").
+					Msg("register")
+			}
+		}
+	}
+}
+
+func (us *connectedUpstreamAgent) runControl(ctx context.Context) {
+	client := proto.NewControllerClient(us.cnx)
+	ctrl, err := client.Control(ctx)
+	if err != nil {
+		utils.Logger.Warn().Str("action", "open").Err(err).Msg("control")
+		return
+	}
+
+	defer func() {
+		if err := ctrl.CloseSend(); err != nil {
+			utils.Logger.Warn().Str("action", "close").Err(err).Msg("control")
+		}
+	}()
+
+	for {
+		request, err := ctrl.Recv()
+		if err != nil {
+			utils.Logger.Warn().Str("action", "read").Err(err).Msg("control")
+			return
+		}
+		srv := gortsplib.Server{}
+		srv.Handler = gortsplib.ServerHandlerOnSessionOpenCtx{}
+
+		switch {
+		case request.GetTeardown() != nil:
+			// FIXME(jfs): NYI
+		case request.GetPause() != nil:
+			// FIXME(jfs): NYI
+		case request.GetPlay() != nil:
+			// FIXME(jfs): NYI
+		}
+	}
+}
+
+func (us *connectedUpstreamAgent) runStream(ctx context.Context) {
+	client := proto.NewControllerClient(us.cnx)
+	ctrl, err := client.MediaUpload(ctx)
+	if err != nil {
+		utils.Logger.Warn().Str("action", "open").Err(err).Msg("media")
+		return
+	}
+	for {
+		client := gortsplib.Server{}
+
+		frame := &proto.MediaFrame{}
+		err := ctrl.Send(frame)
+		if err != nil {
+			utils.Logger.Warn().Str("action", "send").Err(err).Msg("media")
+			return
 		}
 	}
 }

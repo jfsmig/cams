@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"github.com/jfsmig/cams/utils"
+	"github.com/jfsmig/go-bags"
 	"net"
 	"net/url"
 	"regexp"
@@ -23,29 +24,30 @@ type LanAgent struct {
 
 	// Last generation number to have been used/
 	generation uint32
+
 	// How many generations can be missed before a device is forgotten
 	GraceGenerations uint32
 
-	devices    map[string]*OnVifDevice
-	interfaces map[string]*LanScanner
+	devices    bags.SortedObj[string, *LanCamera]
+	interfaces bags.SortedObj[string, *LanInterface]
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     *sync.WaitGroup
+	// Fields extracted from the configuration
+	devicesStatic              []CameraConfig
+	interfacesStatic           []string
+	interfacesDiscoverPatterns []string
 }
 
-type DiscoveryFunc func() ([]string, error)
-
-func NewLanAgent(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup) *LanAgent {
+func NewLanAgent() *LanAgent {
 	return &LanAgent{
-		ScanPeriod:  time.Minute,
+		ScanPeriod:  5 * time.Second,
 		CheckPeriod: 30 * time.Second,
-		devices:     make(map[string]*OnVifDevice),
-		interfaces:  make(map[string]*LanScanner),
 
-		ctx:    ctx,
-		cancel: cancel,
-		wg:     wg,
+		devices:    make([]*LanCamera, 0),
+		interfaces: make([]*LanInterface, 0),
+
+		interfacesDiscoverPatterns: []string{},
+		interfacesStatic:           []string{},
+		devicesStatic:              []CameraConfig{},
 	}
 }
 
@@ -53,9 +55,11 @@ func (lan *LanAgent) Configure(cfg AgentConfig) {
 	for _, itf := range cfg.Interfaces {
 		lan.RegisterInterface(itf)
 	}
-	if len(cfg.DiscoverPatterns) <= 0 {
-		lan.Discover(cfg.DiscoverPatterns...)
-	}
+
+	lan.interfacesDiscoverPatterns = cfg.DiscoverPatterns
+	lan.interfacesStatic = cfg.Interfaces
+	lan.devicesStatic = cfg.Cameras
+
 	if cfg.CheckPeriod > 0 {
 		lan.CheckPeriod = time.Duration(cfg.CheckPeriod) * time.Second
 	}
@@ -64,11 +68,11 @@ func (lan *LanAgent) Configure(cfg AgentConfig) {
 	}
 }
 
-func realDiscovery() ([]string, error) {
+func discoverSystemInterfaces() ([]string, error) {
 	var out []string
 	itfs, err := net.Interfaces()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 	for _, itf := range itfs {
 		out = append(out, itf.Name)
@@ -76,76 +80,93 @@ func realDiscovery() ([]string, error) {
 	return out, nil
 }
 
-// Discover performs a discovery of the local NICs
-func (lan *LanAgent) Discover(patterns ...string) error {
-	return lan.DiscoverFrom(realDiscovery, patterns...)
-}
-
-// DiscoverFrom does the discovery from the output of a given function.
+// DiscoverInterfaces does the discovery from the output of a given function.
 // It helps to test the logic.
-func (lan *LanAgent) DiscoverFrom(source DiscoveryFunc, patterns ...string) error {
-	itfs, err := source()
+func (lan *LanAgent) DiscoverInterfaces() error {
+	itfs, err := discoverSystemInterfaces()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
+
+	utils.Logger.Trace().Strs("interfaces", itfs).Msg("discovery")
+
 	for _, itf := range itfs {
-		for _, pattern := range patterns {
-			if len(pattern) < 2 {
-				continue
-			}
-			not := pattern[0] == '!'
-			if not {
-				pattern = pattern[1:]
-			}
-			if match, err := regexp.MatchString(pattern, itf); err != nil {
-				utils.Logger.Warn().Err(err).Str("itf", itf).Msg("interface matching")
-			} else if match && !not {
-				lan.RegisterInterface(itf)
-			} else {
-				utils.Logger.Info().Str("itf", itf).Msg("interface skipped")
-			}
-		}
+		lan.MaybeRegisterInterface(itf)
+	}
+
+	for _, itf := range lan.interfacesStatic {
+		utils.Logger.Info().Str("itf", itf).Str("action", "force").Msg("discovery")
+		lan.RegisterInterface(itf)
 	}
 	return nil
 }
 
-func (lan *LanAgent) RegisterInterface(itf string) {
-	lan.interfaces[itf] = NewLanScanner(itf)
-	utils.Logger.Info().Str("name", itf).Str("action", "add").Msg("interface")
+func (lan *LanAgent) MaybeRegisterInterface(itf string) {
+	for _, pattern0 := range lan.interfacesDiscoverPatterns {
+		if len(pattern0) < 2 {
+			continue
+		}
+		pattern := pattern0
+		not := pattern[0] == '!'
+		if not {
+			pattern = pattern[1:]
+		}
+		if match, err := regexp.MatchString(pattern, itf); err != nil {
+			utils.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("discovery")
+		} else if !match {
+			continue
+		} else if !not {
+			utils.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("discovery")
+			lan.RegisterInterface(itf)
+		} else {
+			utils.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("discovery")
+		}
+		return
+	}
 }
 
-func (lan *LanAgent) Run() {
-	defer lan.wg.Done()
-	defer lan.cancel()
+func (lan *LanAgent) RegisterInterface(itf string) {
+	lan.interfaces.Add(NewLanInterface(itf))
+}
+
+func (lan *LanAgent) Run(ctx0 context.Context) {
+	wg := sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(ctx0)
+	defer cancel()
 
 	utils.Logger.Info().Str("action", "run").Msg("agent")
+
+	// Perform a first discovery of the local interfaces.
+	// No need to do it periodically, interfaces are unlikely plug & play
+	if err := lan.DiscoverInterfaces(); err != nil {
+		utils.Logger.Error().Err(err).Msg("discovery")
+		return
+	}
 
 	// Spawn one goroutine per registered interface, for concurrent discoveries
 	fn := func(ctx0 context.Context, gen uint32, devs []goonvif.Device) {
 		lan.LearnSync(ctx0, gen, devs)
 	}
 	for _, itf := range lan.interfaces {
-		lan.wg.Add(1)
-		go itf.RunLoop(lan.ctx, lan.wg, fn)
+		wg.Add(1)
+		go swarmRun(ctx, cancel, &wg, func(c context.Context) { itf.RunRescanLoop(c, fn) })
 	}
 
 	// Run the main loop of the agent that interleaves periodical actions
 	// and an eventual clean exit of all the goroutines.
 	nextScan := time.After(0)
-	nextCheck := time.After(0)
 	for {
 		select {
-		case <-lan.ctx.Done():
+		case <-ctx.Done():
 			utils.Logger.Info().Str("action", "stop").Msg("agent")
 			return
 		case <-nextScan:
-			lan.RescanAsync()
+			lan.TriggerRescanAsync(ctx)
 			nextScan = time.After(lan.ScanPeriod)
-		case <-nextCheck:
-			lan.CheckSync()
-			nextCheck = time.After(lan.CheckPeriod)
 		}
 	}
+
+	wg.Done()
 }
 
 func (lan *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
@@ -159,7 +180,7 @@ func (lan *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint3
 		return errors.Trace(err)
 	}
 
-	if devInPlace, ok := lan.devices[k]; ok {
+	if devInPlace, ok := lan.devices.Get(k); ok {
 		if generation > devInPlace.generation {
 			devInPlace.generation = generation
 		}
@@ -174,7 +195,8 @@ func (lan *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint3
 			return errors.Trace(err)
 		}
 		transport := gortsplib.TransportUDP
-		dev := &OnVifDevice{
+		dev := &LanCamera{
+			ID:          k,
 			endpoint:    parsedUrl.Host,
 			user:        user,
 			password:    password,
@@ -189,9 +211,9 @@ func (lan *LanAgent) LearnSingleDeviceSync(ctx context.Context, generation uint3
 				InitialUDPReadTimeout: 3 * time.Second,
 			},
 		}
-		lan.devices[k] = dev
+		lan.devices.Add(dev)
 		utils.Logger.Info().
-			Str("key", k).
+			Str("key", dev.PK()).
 			Str("endpoint", u).
 			Str("action", "add").
 			Str("user", dev.user).
@@ -210,22 +232,19 @@ func (lan *LanAgent) LearnSync(ctx context.Context, gen uint32, discovered []goo
 		}
 	}
 	// Unregister and shut the devices from older generations
-	for k, dev := range lan.devices {
+	for i := len(lan.devices); i > 0; i-- {
+		dev := lan.devices[i-1]
 		if dev.generation < (gen - lan.GraceGenerations) {
-			delete(lan.devices, k)
-			dev.Shut()
+			lan.devices.Remove(dev.PK())
+			dev.StopStream()
 		}
 	}
 }
 
-func (lan *LanAgent) RescanAsync() {
+func (lan *LanAgent) TriggerRescanAsync(ctx context.Context) {
 	gen := atomic.AddUint32(&lan.generation, 1)
 	utils.Logger.Info().Str("action", "rescan").Uint32("gen", gen).Msg("agent")
 	for _, itf := range lan.interfaces {
-		itf.RescanAsync(lan.ctx, gen)
+		itf.TriggerRescanAsync(ctx, gen)
 	}
-}
-
-func (lan *LanAgent) CheckSync() {
-	utils.Logger.Info().Str("action", "check").Msg("agent")
 }

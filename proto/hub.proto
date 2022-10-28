@@ -26,41 +26,6 @@ message Status {
   string status = 2;
 }
 
-message RegisterRequest {
-  StreamId id = 1;
-}
-
-message RegisterReply {
-  Status status = 1;
-}
-
-message StreamId {
-  string user = 1;
-  string stream = 2;
-}
-
-enum Action {
-  UNSET = 0;
-  PLAY = 1;
-  STOP = 2;
-}
-
-message ControlReply {
-  StreamId id = 1;
-  uint64 seq = 2;
-  Status status = 3;
-  Banner banner = 4;
-}
-
-message Banner {
-  string user = 1;
-}
-
-message ControlRequest {
-  uint64 seq = 2;
-  Action action = 3;
-}
-
 message MediaFrame {
   bytes payload = 1;
   MediaBanner banner = 2;
@@ -75,4 +40,43 @@ message MediaBanner {
   string user = 1;
   string stream = 2;
   string token = 3;
+}
+
+message RegisterRequest {
+  StreamId id = 1;
+}
+
+message RegisterReply {
+  Status status = 1;
+}
+
+message StreamId {
+  string user = 1;
+  string stream = 2;
+}
+
+message ControlReply {
+  RtspPlayNotify playing = 1;
+}
+
+message ControlRequest {
+  RtspPlay play = 1;
+  RtspPause pause = 2;
+  RtspTeardown teardown = 3;
+}
+
+message RtspPlayNotify {
+  string streamID = 1;
+}
+
+message RtspPlay {
+  string streamID = 1;
+}
+
+message RtspPause {
+  string streamID = 1;
+}
+
+message RtspTeardown {
+  string streamID = 1;
 }

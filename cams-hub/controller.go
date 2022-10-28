@@ -32,8 +32,8 @@ type AgentTwin struct {
 }
 
 type agentStream struct {
-	streamID   StreamID
-	downstream proto.Controller_MediaUploadServer
+	streamID StreamID
+	requests chan string
 }
 
 func NewAgentTwin(id AgentID, stream proto.Controller_ControlServer) *AgentTwin {
@@ -73,6 +73,24 @@ func (agent *AgentTwin) Exit() {
 
 func (agent *AgentTwin) PK() AgentID {
 	return agent.agentID
+}
+
+func NewAgentStream(id StreamID) *agentStream {
+	return &agentStream{
+		streamID: id,
+		requests: make(chan string, 1),
+	}
+}
+func (agent *AgentTwin) Create(id StreamID) (*agentStream, error) {
+	agent.mediasLock.Lock()
+	defer agent.mediasLock.Unlock()
+	src, ok := agent.medias.Get(id)
+	if ok {
+		return nil, errors.AlreadyExists
+	}
+	src = NewAgentStream(id)
+	agent.medias.Add(src)
+	return src, nil
 }
 
 func (as *agentStream) PK() StreamID {

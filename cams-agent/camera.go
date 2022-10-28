@@ -5,7 +5,7 @@ package main
 import (
 	"context"
 	"github.com/aler9/gortsplib"
-	"github.com/aler9/gortsplib/pkg/base"
+	"github.com/aler9/gortsplib/pkg/url"
 	"github.com/jfsmig/cams/utils"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
@@ -17,7 +17,10 @@ import (
 	"time"
 )
 
-type OnVifDevice struct {
+// We assume only one stream per camera.
+type LanCamera struct {
+	ID string
+
 	endpoint string
 	user     string
 	password string
@@ -28,7 +31,9 @@ type OnVifDevice struct {
 	rtspClient  gortsplib.Client
 }
 
-func (d *OnVifDevice) GetMediaUrl(ctx context.Context) (*base.URL, error) {
+func (s *LanCamera) PK() string { return s.ID }
+
+func (d *LanCamera) GetMediaUrl(ctx context.Context) (*url.URL, error) {
 	request := media.GetStreamUri{
 		StreamSetup: onvif.StreamSetup{
 			Stream: onvif.StreamType("000"),
@@ -48,15 +53,15 @@ func (d *OnVifDevice) GetMediaUrl(ctx context.Context) (*base.URL, error) {
 	sourceUrlRaw := strings.Replace(string(mediaUriReply.MediaUri.Uri),
 		"rtsp://", "rtsp://"+d.user+":"+d.password+"@", 1)
 
-	sourceUrl, err := base.ParseURL(sourceUrlRaw)
+	sourceUrl, err := url.Parse(sourceUrlRaw)
 	if err != nil {
 		return nil, errors.Annotate(err, "parse")
 	}
 	return sourceUrl, nil
 }
 
-func (d *OnVifDevice) ConsumeStream(ctx context.Context, a *LanAgent) error {
-	var sourceUrl *base.URL
+func (d *LanCamera) PlayStream(ctx context.Context, a *LanAgent) error {
+	var sourceUrl *url.URL
 	var err error
 
 	sourceUrl, err = d.GetMediaUrl(ctx)
@@ -74,17 +79,13 @@ func (d *OnVifDevice) ConsumeStream(ctx context.Context, a *LanAgent) error {
 		return errors.Annotate(err, "options")
 	}
 
-	d.rtspClient.OnPacketRTP = func(c *gortsplib.Client) func(i int, bytes []byte) {
-		return func(i int, bytes []byte) {
-			log.Printf("RTP %d %d %d", i, len(bytes), cap(bytes))
-		}
-	}(&d.rtspClient)
+	d.rtspClient.OnPacketRTP = func(ctx *gortsplib.ClientOnPacketRTPCtx) {
+		utils.Logger.Debug().Str("proto", "rtp").Int("track", ctx.TrackID).Uint16("seq", ctx.Packet.SequenceNumber).Str("z", ctx.Packet.String()).Msg("stream")
+	}
 
-	d.rtspClient.OnPacketRTCP = func(c *gortsplib.Client) func(i int, bytes []byte) {
-		return func(i int, bytes []byte) {
-			log.Printf("RTCP %d %d %d", i, len(bytes), cap(bytes))
-		}
-	}(&d.rtspClient)
+	d.rtspClient.OnPacketRTCP = func(ctx *gortsplib.ClientOnPacketRTCPCtx) {
+		utils.Logger.Debug().Str("proto", "rtcp").Int("track", ctx.TrackID).Interface("z", ctx.Packet).Msg("stream")
+	}
 
 	tracks, trackUrl, _, err := d.rtspClient.Describe(sourceUrl)
 	if err != nil {
@@ -106,9 +107,9 @@ func (d *OnVifDevice) ConsumeStream(ctx context.Context, a *LanAgent) error {
 	return nil
 }
 
-func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
-	utils.Logger.Info().Str("url", d.endpoint).Str("action", "run").Msg("device")
-	err := d.ConsumeStream(ctx, a)
+func (d *LanCamera) RunLoop(ctx context.Context, a *LanAgent) {
+	utils.Logger.Debug().Str("url", d.endpoint).Str("action", "run").Msg("device")
+	err := d.PlayStream(ctx, a)
 	if err != nil {
 		utils.Logger.Warn().Str("url", d.endpoint).Str("action", "done").Err(err).Msg("device")
 	} else {
@@ -116,6 +117,6 @@ func (d *OnVifDevice) RunLoop(ctx context.Context, a *LanAgent) {
 	}
 }
 
-func (d *OnVifDevice) Shut() {
+func (d *LanCamera) StopStream() {
 
 }

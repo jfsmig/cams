@@ -146,15 +146,41 @@ func (hub *grpcHub) MediaUpload(stream proto.Controller_MediaUploadServer) error
 		return status.Error(codes.NotFound, "no such agent")
 	}
 
-	agent.mediasLock.Lock()
-	defer agent.mediasLock.Unlock()
-	if agent.medias.Has(StreamID(msg.GetBanner().GetStream())) {
-		return status.Error(codes.AlreadyExists, "stream found")
+	src, err := agent.Create(StreamID(msg.GetBanner().GetStream()))
+
+	for running := true; running; {
+		select {
+		case req := <-src.requests:
+			switch req {
+			case CommandExit:
+				running = false
+			default:
+				utils.Logger.Warn().Msg("Unexpected command")
+				running = false
+			}
+		default:
+			if msg, err = stream.Recv(); err != nil {
+				break
+			}
+			// TODO(jfs): push the frame to its listeners
+		}
 	}
 
-	return status.Error(codes.Unimplemented, "NYI")
+	// Close the subscribers
+	agent.terminations <- src.PK()
+	return err
 }
 
 func (hub *grpcHub) Play(id *proto.StreamId, req proto.Consumer_PlayServer) error {
+	agent, ok := hub.agent.Get(AgentID(id.GetUser()))
+	if !ok {
+		return status.Error(codes.NotFound, "no such agent")
+	}
+
+	_, ok = agent.medias.Get(StreamID(id.Stream))
+	if !ok {
+		return status.Error(codes.NotFound, "no such stream")
+	}
+
 	return status.Error(codes.Unimplemented, "NYI")
 }

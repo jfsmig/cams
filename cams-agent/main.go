@@ -15,20 +15,31 @@ var (
 	upstreamAddr = "127.0.0.1:6000"
 )
 
-func run(ctx context.Context, cancel context.CancelFunc, cfg AgentConfig) error {
+func swarmRun(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, cb func(ctx2 context.Context)) {
 	defer cancel()
+	defer wg.Done()
+	cb(ctx)
+}
 
+func swarm(ctx0 context.Context, cbs ...func(context.Context)) {
+	ctx, cancel := context.WithCancel(ctx0)
+	defer cancel()
 	wg := sync.WaitGroup{}
-	upstream := NewUpstreamAgent(ctx, cancel, &wg)
-	lan := NewLanAgent(ctx, cancel, &wg)
 
+	wg.Add(len(cbs))
+	for _, cb := range cbs {
+		go swarmRun(ctx, cancel, &wg, cb)
+	}
+	wg.Done()
+}
+
+func run(ctx context.Context, cfg AgentConfig) error {
+	lan := NewLanAgent()
 	lan.Configure(cfg)
 
-	wg.Add(2)
-	go upstream.Run(upstreamAddr)
-	go lan.Run()
-	wg.Wait()
-
+	swarm(ctx,
+		func(c context.Context) { RunUpstreamAgent(c, upstreamAddr) },
+		func(c context.Context) { lan.Run(c) })
 	return nil
 }
 
@@ -39,14 +50,10 @@ func main() {
 		Long:  "LAN agent for OnVif cameras",
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
 			cfg := AgentConfig{
-				DiscoverPatterns: []string{"*"},
+				DiscoverPatterns: []string{"!lo", "!docker.*", ".*"},
 			}
-
-			return run(ctx, cancel, cfg)
+			return run(context.Background(), cfg)
 		},
 	}
 

@@ -6,26 +6,26 @@ import (
 	"context"
 	"github.com/jfsmig/cams/utils"
 	goonvif "github.com/use-go/onvif"
-	"sync"
 )
 
-type LanScanner struct {
+type LanInterface struct {
 	ItfName string
 	trigger chan uint32
 }
 
-func NewLanScanner(name string) *LanScanner {
-	return &LanScanner{
+func NewLanInterface(name string) *LanInterface {
+	return &LanInterface{
 		ItfName: name,
 		trigger: make(chan uint32, 8),
 	}
 }
 
+func (ls *LanInterface) PK() string { return ls.ItfName }
+
 type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif.Device)
 
-func (ls *LanScanner) RunLoop(ctx context.Context, wg *sync.WaitGroup, register RegistrationFunc) {
-	defer wg.Done()
-	utils.Logger.Info().Str("name", ls.ItfName).Str("action", "run").Msg("interface")
+func (ls *LanInterface) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
+	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "run").Msg("interface")
 	for {
 		select {
 		case <-ctx.Done():
@@ -43,7 +43,7 @@ func (ls *LanScanner) RunLoop(ctx context.Context, wg *sync.WaitGroup, register 
 	}
 }
 
-func (ls *LanScanner) RescanAsync(ctx context.Context, generation uint32) {
+func (ls *LanInterface) TriggerRescanAsync(ctx context.Context, generation uint32) {
 	select {
 	case <-ctx.Done():
 		// generate no trigger if waiting for an exit
