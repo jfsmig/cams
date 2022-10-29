@@ -3,10 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"github.com/jfsmig/cams/utils"
+	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"google.golang.org/grpc"
-	"sync"
 	"time"
 
 	"github.com/aler9/gortsplib"
@@ -14,41 +15,43 @@ import (
 )
 
 func RunUpstreamAgent(ctx context.Context, addr string) {
-	for ctx.Err() != nil {
+	utils.Logger.Info().Str("action", "run").Msg("upstream")
+
+	for ctx.Err() == nil {
 		<-time.After(time.Second) // Pause to avoid crazy looping of connection attempts
 		reconnectAndRerun(ctx, addr)
 	}
 }
 
-type connectedUpstreamAgent struct {
+type upstreamAgent struct {
 	cnx *grpc.ClientConn
 }
 
-func reconnectAndRerun(ctx0 context.Context, addr string) {
-	ctx, cancel := context.WithCancel(ctx0)
-	defer cancel()
-	wg := sync.WaitGroup{}
+func reconnectAndRerun(ctx context.Context, addr string) {
+	utils.Logger.Info().Str("action", "restart").Str("endpoint", addr).Msg("upstream")
 
 	cnx, err := utils.DialGrpc(ctx, addr)
 	if err != nil {
 		utils.Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
+		return
 	}
 	defer cnx.Close()
 
-	cus := connectedUpstreamAgent{
+	cus := upstreamAgent{
 		cnx: cnx,
 	}
 
-	wg.Add(3)
-	go swarmRun(ctx, cancel, &wg, func(c context.Context) { cus.runRegistration(c) })
-	go swarmRun(ctx, cancel, &wg, func(c context.Context) { cus.runControl(c) })
-	go swarmRun(ctx, cancel, &wg, func(c context.Context) { cus.runStream(c) })
-	wg.Wait()
+	swarm(ctx,
+		func(c context.Context) { cus.runRegistration(c) },
+		func(c context.Context) { cus.runControl(c) },
+		func(c context.Context) { cus.runStream(c) })
 }
 
 // runRegistration periodically registers the streams found on the cams that
 // have been discovered on the LAN.
-func (us *connectedUpstreamAgent) runRegistration(ctx context.Context) {
+func (us *upstreamAgent) runRegistration(ctx context.Context) {
+	utils.Logger.Info().Str("action", "run").Msg("upstream registration")
+
 	ticker := time.Tick(1 * time.Second)
 
 	client := proto.NewRegistrarClient(us.cnx)
@@ -62,37 +65,41 @@ func (us *connectedUpstreamAgent) runRegistration(ctx context.Context) {
 			}
 			inRep, err := client.Register(ctx, &inReq)
 			if err != nil {
-				utils.Logger.Warn().Str("action", "register").Err(err).Msg("register")
+				utils.Logger.Warn().Err(err).
+					Str("action", "register").
+					Msg("upstream registration")
 				return
 			} else {
 				utils.Logger.Debug().
 					Uint32("status", inRep.Status.Code).
 					Str("msg", inRep.Status.Status).
-					Str("action", "do").
-					Msg("register")
+					Str("action", "register").
+					Msg("upstream registration")
 			}
 		}
 	}
 }
 
-func (us *connectedUpstreamAgent) runControl(ctx context.Context) {
+func (us *upstreamAgent) runControl(ctx context.Context) {
+	utils.Logger.Info().Str("action", "run").Msg("upstream control")
+
 	client := proto.NewControllerClient(us.cnx)
 	ctrl, err := client.Control(ctx)
 	if err != nil {
-		utils.Logger.Warn().Str("action", "open").Err(err).Msg("control")
+		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream control")
 		return
 	}
 
 	defer func() {
 		if err := ctrl.CloseSend(); err != nil {
-			utils.Logger.Warn().Str("action", "close").Err(err).Msg("control")
+			utils.Logger.Warn().Str("action", "close").Err(err).Msg("upstream control")
 		}
 	}()
 
 	for {
 		request, err := ctrl.Recv()
 		if err != nil {
-			utils.Logger.Warn().Str("action", "read").Err(err).Msg("control")
+			utils.Logger.Warn().Str("action", "read").Err(err).Msg("upstream control")
 			return
 		}
 		srv := gortsplib.Server{}
@@ -109,20 +116,54 @@ func (us *connectedUpstreamAgent) runControl(ctx context.Context) {
 	}
 }
 
-func (us *connectedUpstreamAgent) runStream(ctx context.Context) {
+func (us *upstreamAgent) runStream(ctx context.Context) {
 	client := proto.NewControllerClient(us.cnx)
 	ctrl, err := client.MediaUpload(ctx)
 	if err != nil {
-		utils.Logger.Warn().Str("action", "open").Err(err).Msg("media")
+		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream media")
 		return
 	}
-	for {
-		client := gortsplib.Server{}
 
-		frame := &proto.MediaFrame{}
-		err := ctrl.Send(frame)
+	s, err := pull.NewSocket()
+	if err != nil {
+		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
+		return
+	}
+	if err = s.Dial(urlNorth); err != nil {
+		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
+		return
+	}
+
+	for {
+		msg, err := s.Recv()
 		if err != nil {
-			utils.Logger.Warn().Str("action", "send").Err(err).Msg("media")
+			utils.Logger.Warn().Str("action", "consume").Err(err).Msg("upstream media")
+			return
+		}
+
+		// Extract the identifiers of the owner and the stream itself.
+		offsetUser := 0
+		offsetID := bytes.IndexByte(msg[offsetUser:], 0)
+		if offsetID < 0 {
+			panic("invalid internal msg (id)")
+		}
+		offsetID++
+		offsetFrame := bytes.IndexByte(msg[offsetID:], 0)
+		if offsetFrame < 0 {
+			panic("invalid internal msg (frame)")
+		}
+		offsetFrame++
+
+		// Copy the message
+		frame := &proto.MediaFrame{}
+		frame.Id = &proto.StreamId{
+			User:   string(msg[offsetUser : offsetID-1]),
+			Stream: string(msg[offsetID : offsetFrame-1]),
+		}
+		frame.Payload = msg
+
+		if err := ctrl.Send(frame); err != nil {
+			utils.Logger.Warn().Str("action", "send").Err(err).Msg("upstream media")
 			return
 		}
 	}

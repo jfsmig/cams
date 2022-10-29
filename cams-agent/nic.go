@@ -8,23 +8,23 @@ import (
 	goonvif "github.com/use-go/onvif"
 )
 
-type LanInterface struct {
+type Nic struct {
 	ItfName string
 	trigger chan uint32
 }
 
-func NewLanInterface(name string) *LanInterface {
-	return &LanInterface{
+func NewNIC(name string) *Nic {
+	return &Nic{
 		ItfName: name,
 		trigger: make(chan uint32, 8),
 	}
 }
 
-func (ls *LanInterface) PK() string { return ls.ItfName }
+func (ls *Nic) PK() string { return ls.ItfName }
 
 type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif.Device)
 
-func (ls *LanInterface) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
+func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "run").Msg("interface")
 	for {
 		select {
@@ -43,7 +43,7 @@ func (ls *LanInterface) RunRescanLoop(ctx context.Context, register Registration
 	}
 }
 
-func (ls *LanInterface) TriggerRescanAsync(ctx context.Context, generation uint32) {
+func (ls *Nic) TriggerRescanAsync(ctx context.Context, generation uint32) {
 	select {
 	case <-ctx.Done():
 		// generate no trigger if waiting for an exit

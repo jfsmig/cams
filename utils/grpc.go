@@ -68,7 +68,7 @@ func DialGrpc(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 	}
 
 	options := []grpc_retry.CallOption{
-		grpc_retry.WithCodes(codes.Unavailable),
+		grpc_retry.WithCodes(codes.Unavailable, codes.Unimplemented),
 		grpc_retry.WithBackoff(
 			grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
 		),

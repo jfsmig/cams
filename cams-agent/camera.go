@@ -12,6 +12,9 @@ import (
 	"github.com/use-go/onvif/media"
 	sdk "github.com/use-go/onvif/sdk/media"
 	"github.com/use-go/onvif/xsd/onvif"
+	"go.nanomsg.org/mangos/v3/protocol/push"
+	_ "go.nanomsg.org/mangos/v3/transport/inproc"
+
 	"log"
 	"strings"
 	"time"
@@ -60,7 +63,7 @@ func (d *LanCamera) GetMediaUrl(ctx context.Context) (*url.URL, error) {
 	return sourceUrl, nil
 }
 
-func (d *LanCamera) PlayStream(ctx context.Context, a *LanAgent) error {
+func (d *LanCamera) PlayStream(ctx context.Context, a *lanAgent) error {
 	var sourceUrl *url.URL
 	var err error
 
@@ -79,12 +82,63 @@ func (d *LanCamera) PlayStream(ctx context.Context, a *LanAgent) error {
 		return errors.Annotate(err, "options")
 	}
 
+	p, err := push.NewSocket()
+	if err != nil {
+		return errors.Annotate(err, "push socket")
+	}
+	defer p.Close()
+
+	if err = p.Dial(urlSouth); err != nil {
+		return errors.Annotate(err, "push connect")
+	}
+
 	d.rtspClient.OnPacketRTP = func(ctx *gortsplib.ClientOnPacketRTPCtx) {
-		utils.Logger.Debug().Str("proto", "rtp").Int("track", ctx.TrackID).Uint16("seq", ctx.Packet.SequenceNumber).Str("z", ctx.Packet.String()).Msg("stream")
+		b, err := ctx.Packet.Marshal()
+		if err != nil {
+			userLen := len(d.user)
+			idLen := len(d.ID)
+			msgSize := userLen + 1 + idLen + 1 + len(b)
+			msg := make([]byte, msgSize, msgSize)
+
+			copy(msg[0:], []byte(d.user))
+			msg[userLen] = 0
+			copy(msg[userLen+1:], []byte(d.ID))
+			msg[userLen+1+idLen] = 0
+			copy(msg[userLen+1+idLen+1:], b)
+
+			err = p.Send(msg)
+		}
+		utils.Logger.Debug().
+			Str("proto", "rtp").
+			Int("track", ctx.TrackID).
+			Uint16("seq", ctx.Packet.SequenceNumber).
+			Str("z", ctx.Packet.String()).
+			Err(err).
+			Msg("stream")
 	}
 
 	d.rtspClient.OnPacketRTCP = func(ctx *gortsplib.ClientOnPacketRTCPCtx) {
-		utils.Logger.Debug().Str("proto", "rtcp").Int("track", ctx.TrackID).Interface("z", ctx.Packet).Msg("stream")
+		b, err := ctx.Packet.Marshal()
+		if err != nil {
+			userLen := len(d.user)
+			idLen := len(d.ID)
+			msgSize := userLen + 1 + idLen + 1 + len(b)
+			msg := make([]byte, msgSize, msgSize)
+
+			copy(msg[0:], []byte(d.user))
+			msg[userLen] = 0
+			copy(msg[userLen+1:], []byte(d.ID))
+			msg[userLen+1+idLen] = 0
+			copy(msg[userLen+1+idLen+1:], b)
+
+			err = p.Send(msg)
+		}
+		utils.Logger.Debug().
+			Str("proto", "rtcp").
+			Int("track", ctx.TrackID).
+			Interface("z", ctx.Packet).
+			Err(err).
+			Msg("stream")
 	}
 
 	tracks, trackUrl, _, err := d.rtspClient.Describe(sourceUrl)
@@ -107,7 +161,7 @@ func (d *LanCamera) PlayStream(ctx context.Context, a *LanAgent) error {
 	return nil
 }
 
-func (d *LanCamera) RunLoop(ctx context.Context, a *LanAgent) {
+func (d *LanCamera) RunLoop(ctx context.Context, a *lanAgent) {
 	utils.Logger.Debug().Str("url", d.endpoint).Str("action", "run").Msg("device")
 	err := d.PlayStream(ctx, a)
 	if err != nil {

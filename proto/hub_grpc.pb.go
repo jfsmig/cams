@@ -111,6 +111,8 @@ type ControllerClient interface {
 	// Stream of commands from the server to the client
 	Control(ctx context.Context, opts ...grpc.CallOption) (Controller_ControlClient, error)
 	// Stream of media frames from the client to the server
+	// There should be at most one long-standing call to MediaUpload per agent connected
+	// to the cloud.
 	MediaUpload(ctx context.Context, opts ...grpc.CallOption) (Controller_MediaUploadClient, error)
 }
 
@@ -194,6 +196,8 @@ type ControllerServer interface {
 	// Stream of commands from the server to the client
 	Control(Controller_ControlServer) error
 	// Stream of media frames from the client to the server
+	// There should be at most one long-standing call to MediaUpload per agent connected
+	// to the cloud.
 	MediaUpload(Controller_MediaUploadServer) error
 	mustEmbedUnimplementedControllerServer()
 }

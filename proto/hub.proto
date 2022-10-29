@@ -10,13 +10,19 @@ service Registrar {
 }
 
 // The service dedicated to the agents
+// It is all about producing / uploading media streams
 service Controller {
   // Stream of commands from the server to the client
   rpc Control(stream ControlReply) returns (stream ControlRequest) {}
+
   // Stream of media frames from the client to the server
+  // There should be at most one long-standing call to MediaUpload per agent connected
+  // to the cloud.
   rpc MediaUpload(stream MediaFrame) returns (MediaReply) {}
 }
 
+// The service dedicated to the viewers.
+// It is all about consuming / downloading media streams
 service Consumer {
   rpc Play(StreamId) returns (stream MediaFrame) {}
 }
@@ -27,19 +33,13 @@ message Status {
 }
 
 message MediaFrame {
-  bytes payload = 1;
-  MediaBanner banner = 2;
+  StreamId id = 1;
+  bytes payload = 2;
 }
 
 message MediaReply {
   StreamId id = 1;
   Status status = 2;
-}
-
-message MediaBanner {
-  string user = 1;
-  string stream = 2;
-  string token = 3;
 }
 
 message RegisterRequest {
