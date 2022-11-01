@@ -38,7 +38,7 @@ func assertConfig(t *testing.T, decoded, expected AgentConfig) {
 	assertValue(t, decoded.ScanPeriod, expected.ScanPeriod)
 	assertValue(t, decoded.CheckPeriod, expected.CheckPeriod)
 	assertArrays(t, decoded.DiscoverPatterns, expected.DiscoverPatterns)
-	assertArrays(t, decoded.Upstreams, expected.Upstreams)
+	assertValue(t, decoded.Upstream, expected.Upstream)
 	assertArrays(t, decoded.Interfaces, expected.Interfaces)
 	assertArrays(t, decoded.Cameras, expected.Cameras)
 }
@@ -57,9 +57,7 @@ func TestConfig_FromEmpty(t *testing.T) {
 			{Address: "127.0.0.1", User: "admin"},
 			{Address: "127.0.0.2", User: "admin"},
 		},
-		Upstreams: []UpstreamConfig{
-			{Address: "127.0.0.1:6000", Timeout: 10},
-		},
+		Upstream: UpstreamConfig{Address: "127.0.0.1:6000", Timeout: 10},
 	})
 }
 
@@ -76,12 +74,7 @@ func TestConfig_Override(t *testing.T) {
 			{Address: "127.0.0.2", User: "y"},
 			{Address: "127.0.0.2", User: "Z"},
 		},
-		Upstreams: []UpstreamConfig{
-			{Address: "127.0.0.1:6001", Timeout: 10},
-			{Address: "127.0.0.1:6002", Timeout: 10},
-			{Address: "127.0.0.1:6003", Timeout: 10},
-			{Address: "127.0.0.1:6004", Timeout: 10},
-		},
+		Upstream: UpstreamConfig{Address: "127.0.0.1:6001", Timeout: 10},
 	}
 	if err := cfg.LoadString(encoded); err != nil {
 		t.Fatal(err)
@@ -96,8 +89,6 @@ func TestConfig_Override(t *testing.T) {
 			{Address: "127.0.0.1", User: "admin"},
 			{Address: "127.0.0.2", User: "admin"},
 		},
-		Upstreams: []UpstreamConfig{
-			{Address: "127.0.0.1:6000", Timeout: 10},
-		},
+		Upstream: UpstreamConfig{Address: "127.0.0.1:6000", Timeout: 10},
 	})
 }

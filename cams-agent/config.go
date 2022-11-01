@@ -23,13 +23,15 @@ type CameraConfig struct {
 }
 
 type AgentConfig struct {
+	User string `json:"user"`
+
 	DiscoverPatterns []string `json:"discover"`
 	ScanPeriod       int64    `json:"scan_period"`
 	CheckPeriod      int64    `json:"check_period"`
 
-	Interfaces []string         `json:"interfaces"`
-	Cameras    []CameraConfig   `json:"cameras"`
-	Upstreams  []UpstreamConfig `json:"upstreams"`
+	Interfaces []string       `json:"interfaces"`
+	Cameras    []CameraConfig `json:"cameras"`
+	Upstream   UpstreamConfig `json:"upstreams"`
 }
 
 func (cfg *AgentConfig) LoadFile(path string) error {

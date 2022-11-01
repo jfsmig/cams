@@ -1,13 +1,10 @@
 syntax = "proto3";
 
-option go_package = ".;proto";
+option go_package = "../api/pb;pb";
 
-package cams.proto;
+package cams.api.hub;
 
-// The service used for authentication and provisioning
-service Registrar {
-  rpc Register(RegisterRequest) returns (RegisterReply) {}
-}
+import "hub.proto";
 
 // The service dedicated to the agents
 // It is all about producing / uploading media streams
@@ -18,41 +15,7 @@ service Controller {
   // Stream of media frames from the client to the server
   // There should be at most one long-standing call to MediaUpload per agent connected
   // to the cloud.
-  rpc MediaUpload(stream MediaFrame) returns (MediaReply) {}
-}
-
-// The service dedicated to the viewers.
-// It is all about consuming / downloading media streams
-service Consumer {
-  rpc Play(StreamId) returns (stream MediaFrame) {}
-}
-
-message Status {
-  uint32 code = 1;
-  string status = 2;
-}
-
-message MediaFrame {
-  StreamId id = 1;
-  bytes payload = 2;
-}
-
-message MediaReply {
-  StreamId id = 1;
-  Status status = 2;
-}
-
-message RegisterRequest {
-  StreamId id = 1;
-}
-
-message RegisterReply {
-  Status status = 1;
-}
-
-message StreamId {
-  string user = 1;
-  string stream = 2;
+  rpc MediaUpload(stream MediaFrame) returns (None) {}
 }
 
 message ControlReply {
@@ -79,4 +42,15 @@ message RtspPause {
 
 message RtspTeardown {
   string streamID = 1;
+}
+
+enum MediaFrameType {
+  FrameType_UNSPECIFIED = 0;
+  FrameType_RTP = 1;
+  FrameType_RTCP = 2;
+}
+
+message MediaFrame {
+  MediaFrameType type = 2;
+  bytes payload = 3;
 }

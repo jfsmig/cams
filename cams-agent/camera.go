@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/url"
+	"github.com/jfsmig/cams/api/pb"
 	"github.com/jfsmig/cams/utils"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
@@ -95,17 +96,7 @@ func (d *LanCamera) PlayStream(ctx context.Context, a *lanAgent) error {
 	d.rtspClient.OnPacketRTP = func(ctx *gortsplib.ClientOnPacketRTPCtx) {
 		b, err := ctx.Packet.Marshal()
 		if err != nil {
-			userLen := len(d.user)
-			idLen := len(d.ID)
-			msgSize := userLen + 1 + idLen + 1 + len(b)
-			msg := make([]byte, msgSize, msgSize)
-
-			copy(msg[0:], []byte(d.user))
-			msg[userLen] = 0
-			copy(msg[userLen+1:], []byte(d.ID))
-			msg[userLen+1+idLen] = 0
-			copy(msg[userLen+1+idLen+1:], b)
-
+			msg := utils.MediaEncode(d.user, d.ID, pb.MediaFrameType_FrameType_RTP, b)
 			err = p.Send(msg)
 		}
 		utils.Logger.Debug().
@@ -120,17 +111,7 @@ func (d *LanCamera) PlayStream(ctx context.Context, a *lanAgent) error {
 	d.rtspClient.OnPacketRTCP = func(ctx *gortsplib.ClientOnPacketRTCPCtx) {
 		b, err := ctx.Packet.Marshal()
 		if err != nil {
-			userLen := len(d.user)
-			idLen := len(d.ID)
-			msgSize := userLen + 1 + idLen + 1 + len(b)
-			msg := make([]byte, msgSize, msgSize)
-
-			copy(msg[0:], []byte(d.user))
-			msg[userLen] = 0
-			copy(msg[userLen+1:], []byte(d.ID))
-			msg[userLen+1+idLen] = 0
-			copy(msg[userLen+1+idLen+1:], b)
-
+			msg := utils.MediaEncode(d.user, d.ID, pb.MediaFrameType_FrameType_RTCP, b)
 			err = p.Send(msg)
 		}
 		utils.Logger.Debug().
@@ -161,8 +142,8 @@ func (d *LanCamera) PlayStream(ctx context.Context, a *lanAgent) error {
 	return nil
 }
 
-func (d *LanCamera) RunLoop(ctx context.Context, a *lanAgent) {
-	utils.Logger.Debug().Str("url", d.endpoint).Str("action", "run").Msg("device")
+func (d *LanCamera) PlayStreamLoop(ctx context.Context, a *lanAgent) {
+	utils.Logger.Debug().Str("url", d.endpoint).Str("action", "start").Msg("device")
 	err := d.PlayStream(ctx, a)
 	if err != nil {
 		utils.Logger.Warn().Str("url", d.endpoint).Str("action", "done").Err(err).Msg("device")

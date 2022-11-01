@@ -25,7 +25,7 @@ func (ls *Nic) PK() string { return ls.ItfName }
 type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif.Device)
 
 func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
-	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "run").Msg("interface")
+	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "start").Msg("interface")
 	for {
 		select {
 		case <-ctx.Done():

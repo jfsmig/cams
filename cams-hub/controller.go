@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/jfsmig/cams/proto"
+	"github.com/jfsmig/cams/api/pb"
 	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
 	"strings"
@@ -11,14 +11,15 @@ import (
 )
 
 const (
-	CommandPlay = "play"
-	CommandStop = "stop"
-	CommandExit = "exit"
+	CtrlCommandPlay  = "play"
+	CtrlCommandStop  = "stop"
+	CtrlCommandExit  = "exit"
+	MediaCommandExit = "exit"
 )
 
 type AgentTwin struct {
 	agentID    AgentID
-	downstream proto.Controller_ControlServer
+	downstream pb.Controller_ControlServer
 
 	// Control commands sent to the agent twin by the system
 	requests chan string
@@ -36,7 +37,7 @@ type agentStream struct {
 	requests chan string
 }
 
-func NewAgentTwin(id AgentID, stream proto.Controller_ControlServer) *AgentTwin {
+func NewAgentTwin(id AgentID, stream pb.Controller_ControlServer) *AgentTwin {
 	agent := AgentTwin{}
 	agent.agentID = id
 	agent.downstream = stream
@@ -58,17 +59,17 @@ func _command(action string, agentToken string, args ...string) string {
 }
 
 func (agent *AgentTwin) Play(streamID string) error {
-	agent.requests <- _command(CommandPlay, string(agent.PK()), streamID)
+	agent.requests <- _command(CtrlCommandPlay, string(agent.PK()), streamID)
 	return nil
 }
 
 func (agent *AgentTwin) Stop(streamID string) error {
-	agent.requests <- _command(CommandStop, string(agent.PK()), streamID)
+	agent.requests <- _command(CtrlCommandStop, string(agent.PK()), streamID)
 	return nil
 }
 
 func (agent *AgentTwin) Exit() {
-	agent.requests <- _command(CommandExit, string(agent.PK()))
+	agent.requests <- _command(CtrlCommandExit, string(agent.PK()))
 }
 
 func (agent *AgentTwin) PK() AgentID {
@@ -81,7 +82,8 @@ func NewAgentStream(id StreamID) *agentStream {
 		requests: make(chan string, 1),
 	}
 }
-func (agent *AgentTwin) Create(id StreamID) (*agentStream, error) {
+
+func (agent *AgentTwin) CreateStream(id StreamID) (*agentStream, error) {
 	agent.mediasLock.Lock()
 	defer agent.mediasLock.Unlock()
 	src, ok := agent.medias.Get(id)
@@ -98,5 +100,6 @@ func (as *agentStream) PK() StreamID {
 }
 
 func (as *agentStream) Exit() error {
-	return errors.NotImplemented
+	as.requests <- MediaCommandExit
+	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"context"
 	"github.com/jfsmig/cams/utils"
 	"github.com/spf13/cobra"
-	"sync"
 )
 
 const (
@@ -14,14 +13,6 @@ const (
 	defaultTLSPathCRT = ""
 	defaultTLSPathKey = ""
 )
-
-type runnable func(ctx context.Context) error
-
-func runChild(ctx context.Context, cancel context.CancelFunc, wg *sync.WaitGroup, cb runnable) error {
-	defer cancel()
-	defer wg.Done()
-	return cb(ctx)
-}
 
 func main() {
 	cmd := &cobra.Command{
@@ -38,7 +29,7 @@ func main() {
 				PathCrt:    defaultTLSPathCRT,
 				PathKey:    defaultTLSPathKey,
 			}
-
+			// FIXME(jfs): load an external cconfiguration file or CLI options
 			return runHub(ctx, cfg)
 		},
 	}

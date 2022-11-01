@@ -3,65 +3,86 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"github.com/jfsmig/cams/api/pb"
 	"github.com/jfsmig/cams/utils"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"google.golang.org/grpc"
 	"time"
 
 	"github.com/aler9/gortsplib"
-	"github.com/jfsmig/cams/proto"
 )
 
-func RunUpstreamAgent(ctx context.Context, addr string) {
-	utils.Logger.Info().Str("action", "run").Msg("upstream")
+type upstreamAgent struct {
+	cfg AgentConfig
+	cnx *grpc.ClientConn
+	lan *lanAgent
 
-	for ctx.Err() == nil {
-		<-time.After(time.Second) // Pause to avoid crazy looping of connection attempts
-		reconnectAndRerun(ctx, addr)
+	swarm utils.Swarm
+}
+
+type upstreamMedia struct {
+	us      *upstreamAgent
+	camID   string
+	control chan string
+}
+
+func NewUpstreamAgent(cfg AgentConfig) *upstreamAgent {
+	return &upstreamAgent{
+		cfg:   cfg,
+		cnx:   nil,
+		lan:   nil,
+		swarm: nil,
 	}
 }
 
-type upstreamAgent struct {
-	cnx *grpc.ClientConn
+func (us *upstreamAgent) Run(ctx context.Context, lan *lanAgent) {
+	utils.Logger.Debug().Str("action", "start").Msg("upstream")
+
+	for ctx.Err() == nil {
+		<-time.After(time.Second) // Pause to avoid crazy looping of connection attempts
+		us.reconnectAndRerun(ctx, lan)
+	}
 }
 
-func reconnectAndRerun(ctx context.Context, addr string) {
-	utils.Logger.Info().Str("action", "restart").Str("endpoint", addr).Msg("upstream")
+func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, lan *lanAgent) {
+	utils.Logger.Trace().Str("action", "restart").Str("endpoint", us.cfg.Upstream.Address).Msg("upstream")
 
-	cnx, err := utils.DialGrpc(ctx, addr)
+	cnx, err := utils.DialInsecure(ctx, us.cfg.Upstream.Address)
 	if err != nil {
 		utils.Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
 		return
 	}
 	defer cnx.Close()
 
-	cus := upstreamAgent{
-		cnx: cnx,
-	}
+	us.cnx = cnx
+	us.lan = lan
+	us.swarm = utils.NewSwarm(ctx)
 
-	swarm(ctx,
-		func(c context.Context) { cus.runRegistration(c) },
-		func(c context.Context) { cus.runControl(c) },
-		func(c context.Context) { cus.runStream(c) })
+	defer us.swarm.Cancel()
+	defer us.swarm.Wait()
+	us.swarm.Run(func(c context.Context) { us.runRegistration(c) })
+	us.swarm.Run(func(c context.Context) { us.runControl(c) })
 }
 
 // runRegistration periodically registers the streams found on the cams that
 // have been discovered on the LAN.
 func (us *upstreamAgent) runRegistration(ctx context.Context) {
-	utils.Logger.Info().Str("action", "run").Msg("upstream registration")
+	utils.Logger.Trace().Str("action", "start").Msg("upstream registration")
 
 	ticker := time.Tick(1 * time.Second)
 
-	client := proto.NewRegistrarClient(us.cnx)
+	client := pb.NewRegistrarClient(us.cnx)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker:
-			inReq := proto.RegisterRequest{
-				Id: &proto.StreamId{},
+			inReq := pb.RegisterRequest{
+				Id: &pb.StreamId{
+					User: us.cfg.User,
+					// FIXME(jfs): configure the camera
+				},
 			}
 			inRep, err := client.Register(ctx, &inReq)
 			if err != nil {
@@ -81,9 +102,12 @@ func (us *upstreamAgent) runRegistration(ctx context.Context) {
 }
 
 func (us *upstreamAgent) runControl(ctx context.Context) {
-	utils.Logger.Info().Str("action", "run").Msg("upstream control")
+	utils.Logger.Trace().Str("action", "start	").Msg("upstream control")
 
-	client := proto.NewControllerClient(us.cnx)
+	client := pb.NewControllerClient(us.cnx)
+
+	ctx = context.WithValue(ctx, "user", us.cfg.User)
+
 	ctrl, err := client.Control(ctx)
 	if err != nil {
 		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream control")
@@ -116,24 +140,46 @@ func (us *upstreamAgent) runControl(ctx context.Context) {
 	}
 }
 
-func (us *upstreamAgent) runStream(ctx context.Context) {
-	client := proto.NewControllerClient(us.cnx)
+func (us *upstreamAgent) runMedia(ctx context.Context, camID string) {
+	um := &upstreamMedia{
+		us:      us,
+		camID:   camID,
+		control: make(chan string, 0),
+	}
+	us.swarm.Run(func(c context.Context) { um.Run(c) })
+}
+
+func (us *upstreamAgent) UpdateCamera(camId string, state CameraState) {
+
+}
+
+func (us *upstreamAgent) PK() string { return "ua" }
+
+func (um *upstreamMedia) Run(ctx context.Context) {
+	utils.Logger.Trace().Str("action", "start").Str("camera", um.camID).Msg("upstream media")
+
+	// Connect to the internal media bridge fed by the camera
+	s, err := pull.NewSocket()
+	if err != nil {
+		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
+		return
+	}
+	if err = s.Dial(urlNorth + "/" + um.camID); err != nil {
+		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
+		return
+	}
+
+	// Open a gRPC connection for the upstream
+	client := pb.NewControllerClient(um.us.cnx)
+	ctx = context.WithValue(ctx, "user", um.us.cfg.User)
+	ctx = context.WithValue(ctx, "stream", um.camID)
 	ctrl, err := client.MediaUpload(ctx)
 	if err != nil {
 		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream media")
 		return
 	}
 
-	s, err := pull.NewSocket()
-	if err != nil {
-		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
-		return
-	}
-	if err = s.Dial(urlNorth); err != nil {
-		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
-		return
-	}
-
+	// Loop on the media frames from the bridge and sent gRPC messages in the upstream
 	for {
 		msg, err := s.Recv()
 		if err != nil {
@@ -141,27 +187,7 @@ func (us *upstreamAgent) runStream(ctx context.Context) {
 			return
 		}
 
-		// Extract the identifiers of the owner and the stream itself.
-		offsetUser := 0
-		offsetID := bytes.IndexByte(msg[offsetUser:], 0)
-		if offsetID < 0 {
-			panic("invalid internal msg (id)")
-		}
-		offsetID++
-		offsetFrame := bytes.IndexByte(msg[offsetID:], 0)
-		if offsetFrame < 0 {
-			panic("invalid internal msg (frame)")
-		}
-		offsetFrame++
-
-		// Copy the message
-		frame := &proto.MediaFrame{}
-		frame.Id = &proto.StreamId{
-			User:   string(msg[offsetUser : offsetID-1]),
-			Stream: string(msg[offsetID : offsetFrame-1]),
-		}
-		frame.Payload = msg
-
+		frame := utils.MediaDecode(msg)
 		if err := ctrl.Send(frame); err != nil {
 			utils.Logger.Warn().Str("action", "send").Err(err).Msg("upstream media")
 			return

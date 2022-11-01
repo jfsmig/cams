@@ -4,13 +4,12 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/proto"
+	"github.com/jfsmig/cams/api/pb"
 	"github.com/jfsmig/cams/utils"
 	"github.com/jfsmig/go-bags"
-	"github.com/juju/errors"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
 	"net"
 	"strings"
 	"sync"
@@ -25,9 +24,8 @@ type TLSConfig struct {
 }
 
 type grpcHub struct {
-	proto.UnimplementedRegistrarServer
-	proto.UnimplementedControllerServer
-	proto.UnimplementedConsumerServer
+	pb.UnimplementedRegistrarServer
+	pb.UnimplementedControllerServer
 
 	config utils.ServerConfig
 
@@ -47,47 +45,42 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 		config: config,
 	}
 
-	cnx, err := hub.config.ServeTLS()
+	utils.Logger.Info().Str("action", "start").Msg("hub")
+
+	var cnx *grpc.Server
+	var err error
+
+	if len(config.PathCrt) <= 0 || len(config.PathKey) <= 0 {
+		cnx, err = hub.config.ServeInsecure()
+	} else {
+		cnx, err = hub.config.ServeTLS()
+	}
 	if err != nil {
 		return err
 	}
 
-	listener, err := net.Listen("", hub.config.ListenAddr)
+	listener, err := net.Listen("tcp", hub.config.ListenAddr)
 	if err != nil {
 		return err
 	}
 
-	proto.RegisterRegistrarServer(cnx, hub)
-	proto.RegisterControllerServer(cnx, hub)
-	proto.RegisterConsumerServer(cnx, hub)
+	pb.RegisterRegistrarServer(cnx, hub)
+	pb.RegisterControllerServer(cnx, hub)
 
 	hub.registrar = NewRegistrarInMem()
 
 	return cnx.Serve(listener)
 }
 
-func (hub *grpcHub) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterReply, error) {
+func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
 	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.Stream})
-	return &proto.RegisterReply{
-		Status: &proto.Status{Code: 202, Status: "registered"},
+	return &pb.RegisterReply{
+		Status: &pb.Status{Code: 202, Status: "registered"},
 	}, err
 }
 
-func (hub *grpcHub) Control(stream proto.Controller_ControlServer) error {
-	// Consume the banner
-	banner, err := stream.Recv()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		return errors.Annotate(err, "stream read")
-	}
-
-	// locate the agent is any
-	if banner.GetBanner() == nil {
-		return status.Error(codes.InvalidArgument, "expected banner")
-	}
-	user := banner.GetBanner().GetUser()
+func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
+	user := stream.Context().Value("user").(string)
 	if hub.agent.Has(AgentID(user)) {
 		return status.Error(codes.AlreadyExists, "agent known")
 	}
@@ -100,9 +93,9 @@ func (hub *grpcHub) Control(stream proto.Controller_ControlServer) error {
 		case cmd := <-agent.requests:
 			tokens := strings.Split(cmd, " ")
 			switch tokens[0] {
-			case CommandPlay: // Play a stream
-			case CommandStop: // Stop a stream
-			case CommandExit: // abort the
+			case CtrlCommandPlay: // Play a stream
+			case CtrlCommandStop: // Stop a stream
+			case CtrlCommandExit: // abort the
 				running = false
 			}
 		case done := <-agent.terminations:
@@ -123,64 +116,75 @@ func (hub *grpcHub) Control(stream proto.Controller_ControlServer) error {
 	// Unregister the AgentTwin
 	hub.agent.Remove(AgentID(user))
 
-	if err == nil {
-		return nil
+	//return status.Error(codes.Aborted, "An error occured")
+	return nil
+}
+
+func get[T any](ctx context.Context, k string) (T, error) {
+	if v := ctx.Value(k); v == nil {
+		return nil, status.Error(codes.InvalidArgument, "Missing field")
+	} else if v, ok := v.(T); !ok {
+		return nil, status.Error(codes.InvalidArgument, "Invalid field")
+	} else {
+		return v, nil
 	}
-	return status.Error(codes.Aborted, "An error occured")
 }
 
 // An upload is starting.
 // A banner is expected from the stream with the ID of the user and the ID of the stream
 // Since the agent must wait for the PLAY command, there must be an expectation for that
-func (hub *grpcHub) MediaUpload(stream proto.Controller_MediaUploadServer) error {
-	msg, err := stream.Recv()
-	if err != nil {
+func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
+	// Extract the stream identifiers from the channel context
+	var userId, streamId string
+	var err error
+	if userId, err = get[string](stream.Context(), "user"); err != nil {
 		return err
 	}
-	if msg.GetBanner() == nil {
-		return status.Error(codes.InvalidArgument, "expected banner")
+	if streamId, err = get[string](stream.Context(), "stream"); err != nil {
+		return err
 	}
 
-	agent, ok := hub.agent.Get(AgentID(msg.GetBanner().GetUser()))
+	// Ensure the digital twin of the agent exists (it has been created at the provisionning step.
+	// and that we create the ownly media upstream for that digital twin.
+	agent, ok := hub.agent.Get(AgentID(userId))
 	if !ok {
-		return status.Error(codes.NotFound, "no such agent")
+		return status.Error(codes.NotFound, "agent unknown")
 	}
 
-	src, err := agent.Create(StreamID(msg.GetBanner().GetStream()))
+	upstream, err := agent.CreateStream(StreamID(streamId))
+	if err != nil {
+		return status.Error(codes.AlreadyExists, "stream found")
+	}
 
 	for running := true; running; {
 		select {
-		case req := <-src.requests:
+		case req := <-upstream.requests:
 			switch req {
-			case CommandExit:
+			case MediaCommandExit:
 				running = false
 			default:
 				utils.Logger.Warn().Msg("Unexpected command")
 				running = false
 			}
 		default:
-			if msg, err = stream.Recv(); err != nil {
+			if msg, err := stream.Recv(); err != nil {
 				break
+			} else {
+				switch msg.Type {
+				case pb.MediaFrameType_FrameType_RTP:
+					// TODO(jfs): push the frame to its listeners
+					utils.Logger.Info().Str("proto", "rtp").Msg("media")
+				case pb.MediaFrameType_FrameType_RTCP:
+					// TODO(jfs): push the frame to its listeners
+					utils.Logger.Info().Str("proto", "rtcp").Msg("media")
+				default:
+					running = false
+				}
 			}
-			// TODO(jfs): push the frame to its listeners
 		}
 	}
 
 	// Close the subscribers
-	agent.terminations <- src.PK()
+	agent.terminations <- upstream.PK()
 	return err
-}
-
-func (hub *grpcHub) Play(id *proto.StreamId, req proto.Consumer_PlayServer) error {
-	agent, ok := hub.agent.Get(AgentID(id.GetUser()))
-	if !ok {
-		return status.Error(codes.NotFound, "no such agent")
-	}
-
-	_, ok = agent.medias.Get(StreamID(id.Stream))
-	if !ok {
-		return status.Error(codes.NotFound, "no such stream")
-	}
-
-	return status.Error(codes.Unimplemented, "NYI")
 }

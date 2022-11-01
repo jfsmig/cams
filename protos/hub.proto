@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "../api/pb;pb";
+
+package cams.api.hub;
+
+message Status {
+  uint32 code = 1;
+  string status = 2;
+}
+
+message StreamId {
+  string user = 1;
+  string stream = 2;
+}
+
+message None {}

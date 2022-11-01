@@ -10,10 +10,9 @@ import (
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"io/ioutil"
-	"time"
 )
 
 type ServerConfig struct {
@@ -62,22 +61,35 @@ func (srv *ServerConfig) ServeTLS() (*grpc.Server, error) {
 			NewStreamServerInterceptorZerolog()))), nil
 }
 
-func DialGrpc(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	config := &tls.Config{
-		InsecureSkipVerify: true,
-	}
+func (srv *ServerConfig) ServeInsecure() (*grpc.Server, error) {
+	return grpc.NewServer(
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			//grpc_prometheus.UnaryServerInterceptor,
+			NewUnaryServerInterceptorZerolog())),
+		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
+			//grpc_prometheus.StreamServerInterceptor,
+			NewStreamServerInterceptorZerolog()))), nil
+}
+
+func DialTLS(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
+	return nil, errors.NotImplemented
+}
+
+func DialInsecure(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
+	//config := &tls.Config{InsecureSkipVerify: true,}
 
 	options := []grpc_retry.CallOption{
-		grpc_retry.WithCodes(codes.Unavailable, codes.Unimplemented),
-		grpc_retry.WithBackoff(
-			grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
-		),
-		grpc_retry.WithMax(5),
-		grpc_retry.WithPerRetryTimeout(1 * time.Second),
+		//grpc_retry.WithCodes(codes.Unavailable),
+		//grpc_retry.WithBackoff(
+		//	grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
+		//),
+		//grpc_retry.WithMax(5),
+		//grpc_retry.WithPerRetryTimeout(1 * time.Second),
 	}
 
 	return grpc.DialContext(ctx, endpoint,
-		grpc.WithTransportCredentials(credentials.NewTLS(config)),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		//grpc.WithTransportCredentials(credentials.NewTLS(config)),
 		grpc.WithUnaryInterceptor(
 			grpc_middleware.ChainUnaryClient(
 				//grpc_prometheus.UnaryClientInterceptor,
