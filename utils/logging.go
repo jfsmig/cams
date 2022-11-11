@@ -32,7 +32,7 @@ type logEvt struct {
 }
 
 func newEvent(method string) *logEvt {
-	return &logEvt{z: Logger.Info().Str("uri", method), start: time.Now()}
+	return &logEvt{z: Logger.Trace().Str("uri", method), start: time.Now()}
 }
 
 func (evt *logEvt) send() { evt.z.Send() }
@@ -86,6 +86,7 @@ func NewStreamServerInterceptorZerolog() grpc.StreamServerInterceptor {
 func NewUnaryServerInterceptorZerolog() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		evt := newEvent(info.FullMethod)
+		evt.z.Interface("req", req)
 		resp, err := handler(ctx, req)
 		evt.setResult(err).patchWithRequest(ctx).pathWithReply(ctx).send()
 		return resp, err

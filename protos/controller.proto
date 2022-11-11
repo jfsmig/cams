@@ -18,30 +18,22 @@ service Controller {
   rpc MediaUpload(stream MediaFrame) returns (None) {}
 }
 
-message ControlReply {
-  RtspPlayNotify playing = 1;
+enum StreamCommandType {
+    StreamCommandType_UNSPECIFIED = 0;
+    StreamCommandType_PLAY = 1;
+    StreamCommandType_STOP = 2;
 }
 
+// What should be done
 message ControlRequest {
-  RtspPlay play = 1;
-  RtspPause pause = 2;
-  RtspTeardown teardown = 3;
+  string streamID = 1;
+  StreamCommandType command = 2;
 }
 
-message RtspPlayNotify {
+// What has been done
+message ControlReply {
   string streamID = 1;
-}
-
-message RtspPlay {
-  string streamID = 1;
-}
-
-message RtspPause {
-  string streamID = 1;
-}
-
-message RtspTeardown {
-  string streamID = 1;
+  StreamCommandType command = 2;
 }
 
 enum MediaFrameType {

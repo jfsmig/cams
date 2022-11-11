@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -76,29 +75,30 @@ func DialTLS(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 }
 
 func DialInsecure(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
+	Logger.Info().Str("action", "dial").Str("addr", endpoint).Msg("grpc")
 	//config := &tls.Config{InsecureSkipVerify: true,}
-
-	options := []grpc_retry.CallOption{
-		//grpc_retry.WithCodes(codes.Unavailable),
-		//grpc_retry.WithBackoff(
-		//	grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
-		//),
-		//grpc_retry.WithMax(5),
-		//grpc_retry.WithPerRetryTimeout(1 * time.Second),
-	}
-
+	/*
+		options := []grpc_retry.CallOption{
+			grpc_retry.WithCodes(codes.Unavailable),
+			grpc_retry.WithBackoff(
+				grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
+			),
+			grpc_retry.WithMax(5),
+			grpc_retry.WithPerRetryTimeout(1 * time.Second),
+		}
+	*/
 	return grpc.DialContext(ctx, endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		//grpc.WithTransportCredentials(credentials.NewTLS(config)),
 		grpc.WithUnaryInterceptor(
 			grpc_middleware.ChainUnaryClient(
-				//grpc_prometheus.UnaryClientInterceptor,
-				grpc_retry.UnaryClientInterceptor(options...),
+			//grpc_prometheus.UnaryClientInterceptor,
+			//grpc_retry.UnaryClientInterceptor(options...),
 			)),
 		grpc.WithStreamInterceptor(
 			grpc_middleware.ChainStreamClient(
-				//grpc_prometheus.StreamClientInterceptor,
-				grpc_retry.StreamClientInterceptor(options...),
+			//grpc_prometheus.StreamClientInterceptor,
+			//grpc_retry.StreamClientInterceptor(options...),
 			)),
 	)
 }

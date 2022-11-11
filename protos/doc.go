@@ -9,3 +9,4 @@ package protos
 //go:generate protoc --proto_path=. --go_out=. --go-grpc_out=. hub.proto
 //go:generate protoc --proto_path=. --go_out=. --go-grpc_out=. controller.proto
 //go:generate protoc --proto_path=. --go_out=. --go-grpc_out=. registrar.proto
+//go:generate protoc --proto_path=. --go_out=. --go-grpc_out=. viewer.proto

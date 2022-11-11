@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RegistrarClient interface {
-	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error)
+	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*None, error)
 }
 
 type registrarClient struct {
@@ -33,8 +33,8 @@ func NewRegistrarClient(cc grpc.ClientConnInterface) RegistrarClient {
 	return &registrarClient{cc}
 }
 
-func (c *registrarClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterReply, error) {
-	out := new(RegisterReply)
+func (c *registrarClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*None, error) {
+	out := new(None)
 	err := c.cc.Invoke(ctx, "/cams.api.hub.Registrar/Register", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (c *registrarClient) Register(ctx context.Context, in *RegisterRequest, opt
 // All implementations must embed UnimplementedRegistrarServer
 // for forward compatibility
 type RegistrarServer interface {
-	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
+	Register(context.Context, *RegisterRequest) (*None, error)
 	mustEmbedUnimplementedRegistrarServer()
 }
 
@@ -54,7 +54,7 @@ type RegistrarServer interface {
 type UnimplementedRegistrarServer struct {
 }
 
-func (UnimplementedRegistrarServer) Register(context.Context, *RegisterRequest) (*RegisterReply, error) {
+func (UnimplementedRegistrarServer) Register(context.Context, *RegisterRequest) (*None, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Register not implemented")
 }
 func (UnimplementedRegistrarServer) mustEmbedUnimplementedRegistrarServer() {}

@@ -8,10 +8,15 @@ import (
 	"go.nanomsg.org/mangos/v3/protocol/push"
 )
 
-// mediaBridge bridges two listening socket:
+func makeSouthRtp(camID string) string  { return "inproc://" + camID + "/MS" }
+func makeNorthRtp(camID string) string  { return "inproc://" + camID + "/MN" }
+func makeSouthRtcp(camID string) string { return "inproc://" + camID + "/CS" }
+func makeNorthRtcp(camID string) string { return "inproc://" + camID + "/CN" }
+
+// pipeline bridges two listening socket, from South to North:
 // * "south" is a PULL socket (pipeline protocol) where all the LanCamera connect and produce their frames
 // * "north" is a PUSH socket (pipeline protocol) destined to produce all the frames to the upstreamAgent
-func mediaBridge(ctx context.Context, urlSouth, urlNorth string) {
+func pipeline(ctx context.Context, urlSouth, urlNorth string) {
 	var south, north mangos.Socket
 	var err error
 

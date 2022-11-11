@@ -13,14 +13,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aler9/gortsplib"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 )
 
 type lanAgent struct {
-	swarm utils.Swarm
-
 	ScanPeriod  time.Duration
 	CheckPeriod time.Duration
 
@@ -30,7 +27,8 @@ type lanAgent struct {
 	// How many generations can be missed before a device is forgotten
 	GraceGenerations uint32
 
-	lock sync.Mutex
+	singletonLock sync.Mutex
+	dataLock      sync.Mutex
 
 	devices    bags.SortedObj[string, *LanCamera]
 	interfaces bags.SortedObj[string, *Nic]
@@ -40,6 +38,9 @@ type lanAgent struct {
 	devicesStatic              []CameraConfig
 	interfacesStatic           []string
 	interfacesDiscoverPatterns []string
+
+	nicsGroup utils.Swarm
+	camsSwarm utils.Swarm
 }
 
 type CameraState uint32
@@ -51,7 +52,7 @@ const (
 
 type CameraObserver interface {
 	PK() string
-	UpdateCamera(camId string, state CameraState)
+	Update(camId string, state CameraState)
 }
 
 func NewLanAgent(cfg AgentConfig) *lanAgent {
@@ -85,26 +86,56 @@ func NewLanAgent(cfg AgentConfig) *lanAgent {
 	return lan
 }
 
-func (lan *lanAgent) AttachObserver(observer CameraObserver) {
+func (lan *lanAgent) AttachCameraObserver(observer CameraObserver) {
 	lan.observers.Add(observer)
 }
 
-func (lan *lanAgent) DetachObserver(observer CameraObserver) {
+func (lan *lanAgent) DetachCameraObserver(observer CameraObserver) {
 	lan.observers.Remove(observer.PK())
+}
+
+func (lan *lanAgent) Update(camId, cmd string) {
+	// Locate the camera
+	cam := func(camId string) *LanCamera {
+		lan.dataLock.Lock()
+		defer lan.dataLock.Lock()
+		cam, _ := lan.devices.Get(camId)
+		return cam
+	}(camId)
+	if cam == nil {
+		utils.Logger.Info().Str("cam", camId).Str("cmd", cmd).Err(errors.New("cam not found")).Msg("lan")
+		return
+	}
+
+	switch cmd {
+	case StreamCommandPlay:
+		if cam.State == CamAgentOff {
+			lan.camsSwarm.Run(cam.Run)
+		}
+		cam.PlayStream()
+	case StreamCommandStop:
+		cam.StopStream()
+	}
 }
 
 func (lan *lanAgent) Notify(camId string, state CameraState) {
 	for _, observer := range lan.observers {
-		observer.UpdateCamera(camId, state)
+		observer.Update(camId, state)
 	}
 }
 
 func (lan *lanAgent) Run(ctx context.Context) {
-	s := utils.NewSwarm(ctx)
-	defer s.Wait()
-	defer s.Cancel()
+	if !lan.singletonLock.TryLock() {
+		panic("BUG: the LAN agent coroutine is a singleton")
+	}
+	defer lan.singletonLock.Unlock()
 
 	utils.Logger.Info().Str("action", "start").Msg("lan")
+
+	// Cameras may come ang go, so a simple goroutine swarm if enough.
+	// This is not the case for network interfaces that are rather stable.
+	lan.nicsGroup = utils.NewGroup(ctx)
+	lan.camsSwarm = utils.NewSwarm(ctx)
 
 	// Perform a first discovery of the local interfaces.
 	// No need to do it periodically, interfaces are unlikely plug & play
@@ -115,14 +146,25 @@ func (lan *lanAgent) Run(ctx context.Context) {
 
 	// Spawn one goroutine per registered interface, for concurrent discoveries
 	fn := func(ctx0 context.Context, gen uint32, devs []goonvif.Device) {
-		lan.learnSync(ctx0, gen, devs)
+		lan.learnAllCamerasSync(ctx0, gen, devs)
 	}
 	for _, itf := range lan.interfaces {
-		s.Run(func(c context.Context) { itf.RunRescanLoop(c, fn) })
+		lan.nicsGroup.Run(func(c context.Context) { itf.RunRescanLoop(c, fn) })
 	}
 
-	// Run the main loop of the agent that interleaves periodical actions
-	// and an eventual clean exit of all the goroutines.
+	lan.nicsGroup.Run(func(c context.Context) { lan.RunTimers(c) })
+
+	// Wait for the discovery goroutines to stop, this will happen until a strong
+	// error condition occurs.
+	lan.nicsGroup.Wait()
+
+	// Then ensure no camera goroutine is leaked running in the background
+	lan.camsSwarm.Cancel()
+	lan.camsSwarm.Wait()
+}
+
+// RunTimers runs the main loop of the agent to trigger periodical actions
+func (lan *lanAgent) RunTimers(ctx context.Context) {
 	nextScan := time.After(0)
 	for {
 		select {
@@ -134,13 +176,6 @@ func (lan *lanAgent) Run(ctx context.Context) {
 			nextScan = time.After(lan.ScanPeriod)
 		}
 	}
-}
-
-func (lan *lanAgent) GetCamera(camId string) *LanCamera {
-	lan.lock.Lock()
-	defer lan.lock.Lock()
-	cam, _ := lan.devices.Get(camId)
-	return cam
 }
 
 // discoverNics does the discovery from the output of a given function.
@@ -192,7 +227,7 @@ func (lan *lanAgent) registerInterface(itf string) {
 	lan.interfaces.Add(NewNIC(itf))
 }
 
-func (lan *lanAgent) learnSingleDeviceSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
+func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
 	k := discovered.GetDeviceInfo().SerialNumber
 
 	u := discovered.GetEndpoint("device")
@@ -203,8 +238,8 @@ func (lan *lanAgent) learnSingleDeviceSync(ctx context.Context, generation uint3
 		return errors.Trace(err)
 	}
 
-	lan.lock.Lock()
-	defer lan.lock.Lock()
+	lan.dataLock.Lock()
+	defer lan.dataLock.Lock()
 
 	// If the camera is already know, let's just update its generation counter
 	devInPlace, ok := lan.devices.Get(k)
@@ -216,56 +251,32 @@ func (lan *lanAgent) learnSingleDeviceSync(ctx context.Context, generation uint3
 	}
 
 	// If not, the camera is new on the LAN
-	authenticatedDevice, err := goonvif.NewDevice(goonvif.DeviceParams{
-		Xaddr:    parsedUrl.Host,
-		Username: user,
-		Password: password,
-	})
-	if err != nil {
-		return errors.Trace(err)
+	dev, err := NewCamera(k, parsedUrl.Host)
+	if err == nil {
+		dev.generation = generation
+		lan.devices.Add(dev)
+		utils.Logger.Info().
+			Str("key", dev.PK()).
+			Str("endpoint", u).
+			Str("action", "add").
+			Str("user", dev.user).
+			Str("password", dev.password).
+			Msg("device")
+		lan.Notify(dev.PK(), CameraOnline)
 	}
-	transport := gortsplib.TransportUDP
-	dev := &LanCamera{
-		ID:          k,
-		endpoint:    parsedUrl.Host,
-		user:        user,
-		password:    password,
-		generation:  generation,
-		onvifClient: authenticatedDevice,
-		rtspClient: gortsplib.Client{
-			ReadTimeout:           5 * time.Second,
-			WriteTimeout:          5 * time.Second,
-			RedirectDisable:       true,
-			AnyPortEnable:         true,
-			Transport:             &transport,
-			InitialUDPReadTimeout: 3 * time.Second,
-		},
-	}
-
-	lan.devices.Add(dev)
-
-	utils.Logger.Info().
-		Str("key", dev.PK()).
-		Str("endpoint", u).
-		Str("action", "add").
-		Str("user", dev.user).
-		Str("password", dev.password).
-		Msg("device")
-
-	lan.Notify(dev.PK(), CameraOnline)
-	return nil
+	return err
 }
 
-func (lan *lanAgent) learnSync(ctx context.Context, gen uint32, discovered []goonvif.Device) {
-	// UpdateCamera the devices that match the
+func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discovered []goonvif.Device) {
+	// Update the devices that match the
 	for _, dev := range discovered {
-		if err := lan.learnSingleDeviceSync(ctx, gen, dev); err != nil {
+		if err := lan.learnSingleCameraSync(ctx, gen, dev); err != nil {
 			utils.Logger.Warn().Str("url", dev.GetEndpoint("device")).Err(err).Msg("invalid device discovered")
 		}
 	}
 
-	lan.lock.Lock()
-	defer lan.lock.Unlock()
+	lan.dataLock.Lock()
+	defer lan.dataLock.Unlock()
 
 	// Unregister and shut the devices from older generations
 	for i := len(lan.devices); i > 0; i-- {
@@ -285,6 +296,8 @@ func (lan *lanAgent) triggerRescanAsync(ctx context.Context) {
 		itf.TriggerRescanAsync(ctx, gen)
 	}
 }
+
+func (lan *lanAgent) PK() string { return "lan" }
 
 func discoverSystemNics() ([]string, error) {
 	var out []string

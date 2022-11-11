@@ -7,10 +7,15 @@ import "hub.proto";
 package cams.api.hub;
 
 // The service used for authentication and provisioning
-service Registrar {
-  rpc Register(RegisterRequest) returns (None) {}
+service Viewer {
+  rpc Play(PlayRequest) returns (None) {}
+  rpc Pause(PauseRequest) returns (None) {}
 }
 
-message RegisterRequest {
+message PlayRequest {
+  StreamId id = 1;
+}
+
+message PauseRequest {
   StreamId id = 1;
 }

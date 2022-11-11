@@ -72,15 +72,20 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 	return cnx.Serve(listener)
 }
 
-func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
-	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.Stream})
-	return &pb.RegisterReply{
-		Status: &pb.Status{Code: 202, Status: "registered"},
-	}, err
+func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.None, error) {
+	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.User})
+	if err != nil {
+		return nil, err
+	} else {
+		return &pb.None{}, nil
+	}
 }
 
 func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
-	user := stream.Context().Value("user").(string)
+	user, err := get[string](stream.Context(), "user")
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "no agent id")
+	}
 	if hub.agent.Has(AgentID(user)) {
 		return status.Error(codes.AlreadyExists, "agent known")
 	}
@@ -118,16 +123,6 @@ func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 
 	//return status.Error(codes.Aborted, "An error occured")
 	return nil
-}
-
-func get[T any](ctx context.Context, k string) (T, error) {
-	if v := ctx.Value(k); v == nil {
-		return nil, status.Error(codes.InvalidArgument, "Missing field")
-	} else if v, ok := v.(T); !ok {
-		return nil, status.Error(codes.InvalidArgument, "Invalid field")
-	} else {
-		return v, nil
-	}
 }
 
 // An upload is starting.
@@ -187,4 +182,15 @@ func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 	// Close the subscribers
 	agent.terminations <- upstream.PK()
 	return err
+}
+
+func get[T any](ctx context.Context, k string) (T, error) {
+	var zero T
+	if v := ctx.Value(k); v == nil {
+		return zero, status.Error(codes.InvalidArgument, "Missing field")
+	} else if v, ok := v.(T); !ok {
+		return zero, status.Error(codes.InvalidArgument, "Invalid field")
+	} else {
+		return v, nil
+	}
 }

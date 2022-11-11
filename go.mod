@@ -7,7 +7,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jfsmig/go-bags v0.2.0
 	github.com/juju/errors v0.0.0-20220331221717-b38fca44723b
-	github.com/qmuntal/stateless v1.6.0
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/cobra v1.4.0
 	github.com/use-go/onvif v0.0.1
