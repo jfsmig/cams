@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"github.com/jfsmig/cams/api/pb"
+	"github.com/jfsmig/cams/defs"
 	"github.com/jfsmig/cams/utils"
 	"github.com/jfsmig/go-bags"
 	"google.golang.org/grpc"
@@ -121,21 +122,18 @@ func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 	// Unregister the AgentTwin
 	hub.agent.Remove(AgentID(user))
 
-	//return status.Error(codes.Aborted, "An error occured")
 	return nil
 }
 
 // An upload is starting.
-// A banner is expected from the stream with the ID of the user and the ID of the stream
-// Since the agent must wait for the PLAY command, there must be an expectation for that
 func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 	// Extract the stream identifiers from the channel context
 	var userId, streamId string
 	var err error
-	if userId, err = get[string](stream.Context(), "user"); err != nil {
+	if userId, err = get[string](stream.Context(), defs.KeyUser); err != nil {
 		return err
 	}
-	if streamId, err = get[string](stream.Context(), "stream"); err != nil {
+	if streamId, err = get[string](stream.Context(), defs.KeyStream); err != nil {
 		return err
 	}
 

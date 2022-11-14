@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/cams/defs"
 	"github.com/jfsmig/cams/utils"
 	"github.com/spf13/cobra"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
@@ -51,7 +52,8 @@ func main() {
 					Timeout: 30,
 				},
 			}
-			return runAgent(context.Background(), cfg)
+			ctx := context.WithValue(context.Background(), defs.KeyUser, cfg.User)
+			return runAgent(ctx, cfg)
 		},
 	}
 

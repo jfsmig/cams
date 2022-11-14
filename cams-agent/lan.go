@@ -46,8 +46,8 @@ type lanAgent struct {
 type CameraState uint32
 
 const (
-	CameraOnline CameraState = iota
-	CameraOffline
+	CameraState_Online CameraState = iota
+	CameraState_Offline
 )
 
 type CameraObserver interface {
@@ -94,7 +94,7 @@ func (lan *lanAgent) DetachCameraObserver(observer CameraObserver) {
 	lan.observers.Remove(observer.PK())
 }
 
-func (lan *lanAgent) Update(camId, cmd string) {
+func (lan *lanAgent) Update(camId string, cmd StreamExpectation) {
 	// Locate the camera
 	cam := func(camId string) *LanCamera {
 		lan.dataLock.Lock()
@@ -102,18 +102,19 @@ func (lan *lanAgent) Update(camId, cmd string) {
 		cam, _ := lan.devices.Get(camId)
 		return cam
 	}(camId)
+
 	if cam == nil {
-		utils.Logger.Info().Str("cam", camId).Str("cmd", cmd).Err(errors.New("cam not found")).Msg("lan")
+		utils.Logger.Info().Str("cam", camId).Interface("cmd", cmd).Err(errors.New("cam not found")).Msg("lan")
 		return
 	}
 
 	switch cmd {
-	case StreamCommandPlay:
+	case UpstreamAgent_ExpectPlay:
 		if cam.State == CamAgentOff {
 			lan.camsSwarm.Run(cam.Run)
 		}
 		cam.PlayStream()
-	case StreamCommandStop:
+	case UpstreamAgent_ExpectPause:
 		cam.StopStream()
 	}
 }
@@ -262,7 +263,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 			Str("user", dev.user).
 			Str("password", dev.password).
 			Msg("device")
-		lan.Notify(dev.PK(), CameraOnline)
+		lan.Notify(dev.PK(), CameraState_Online)
 	}
 	return err
 }
@@ -283,7 +284,7 @@ func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discov
 		dev := lan.devices[i-1]
 		if dev.generation < (gen - lan.GraceGenerations) {
 			lan.devices.Remove(dev.PK())
-			lan.Notify(dev.PK(), CameraOffline)
+			lan.Notify(dev.PK(), CameraState_Offline)
 			dev.StopStream()
 		}
 	}
