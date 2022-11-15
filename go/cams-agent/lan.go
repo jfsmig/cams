@@ -4,8 +4,6 @@ package main
 
 import (
 	"context"
-	utils2 "github.com/jfsmig/cams/go/utils"
-	"github.com/jfsmig/go-bags"
 	"net"
 	"net/url"
 	"regexp"
@@ -13,8 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
+
+	"github.com/jfsmig/cams/go/utils"
 )
 
 type lanAgent struct {
@@ -39,8 +40,8 @@ type lanAgent struct {
 	interfacesStatic           []string
 	interfacesDiscoverPatterns []string
 
-	nicsGroup utils2.Swarm
-	camsSwarm utils2.Swarm
+	nicsGroup utils.Swarm
+	camsSwarm utils.Swarm
 }
 
 type CameraState uint32
@@ -104,7 +105,7 @@ func (lan *lanAgent) UpdateStreamExpectation(camId string, cmd StreamExpectation
 	}(camId)
 
 	if cam == nil {
-		utils2.Logger.Info().Str("cam", camId).Interface("cmd", cmd).Err(errors.New("cam not found")).Msg("lan")
+		utils.Logger.Info().Str("cam", camId).Interface("cmd", cmd).Err(errors.New("cam not found")).Msg("lan")
 		return
 	}
 
@@ -131,17 +132,17 @@ func (lan *lanAgent) Run(ctx context.Context) {
 	}
 	defer lan.singletonLock.Unlock()
 
-	utils2.Logger.Info().Str("action", "start").Msg("lan")
+	utils.Logger.Info().Str("action", "start").Msg("lan")
 
 	// Cameras may come ang go, so a simple goroutine swarm if enough.
 	// This is not the case for network interfaces that are rather stable.
-	lan.nicsGroup = utils2.NewGroup(ctx)
-	lan.camsSwarm = utils2.NewSwarm(ctx)
+	lan.nicsGroup = utils.NewGroup(ctx)
+	lan.camsSwarm = utils.NewSwarm(ctx)
 
 	// Perform a first discovery of the local interfaces.
 	// No need to do it periodically, interfaces are unlikely plug & play
 	if err := lan.discoverNics(); err != nil {
-		utils2.Logger.Error().Err(err).Msg("discovery")
+		utils.Logger.Error().Err(err).Msg("discovery")
 		return
 	}
 
@@ -170,7 +171,7 @@ func (lan *lanAgent) RunTimers(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			utils2.Logger.Info().Str("action", "stop").Msg("lan")
+			utils.Logger.Info().Str("action", "stop").Msg("lan")
 			return
 		case <-nextScan:
 			lan.triggerRescanAsync(ctx)
@@ -187,14 +188,14 @@ func (lan *lanAgent) discoverNics() error {
 		return errors.Trace(err)
 	}
 
-	utils2.Logger.Trace().Strs("interfaces", itfs).Msg("discovery")
+	utils.Logger.Trace().Strs("interfaces", itfs).Msg("discovery")
 
 	for _, itf := range itfs {
 		lan.maybeRegisterInterface(itf)
 	}
 
 	for _, itf := range lan.interfacesStatic {
-		utils2.Logger.Info().Str("itf", itf).Str("action", "force").Msg("discovery")
+		utils.Logger.Info().Str("itf", itf).Str("action", "force").Msg("discovery")
 		lan.registerInterface(itf)
 	}
 	return nil
@@ -211,14 +212,14 @@ func (lan *lanAgent) maybeRegisterInterface(itf string) {
 			pattern = pattern[1:]
 		}
 		if match, err := regexp.MatchString(pattern, itf); err != nil {
-			utils2.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("discovery")
+			utils.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("discovery")
 		} else if !match {
 			continue
 		} else if !not {
-			utils2.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("discovery")
+			utils.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("discovery")
 			lan.registerInterface(itf)
 		} else {
-			utils2.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("discovery")
+			utils.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("discovery")
 		}
 		return
 	}
@@ -232,7 +233,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 	k := discovered.GetDeviceInfo().SerialNumber
 
 	u := discovered.GetEndpoint("device")
-	utils2.Logger.Debug().Str("url", u).Uint32("gen", generation).Str("action", "adding").Msg("device")
+	utils.Logger.Debug().Str("url", u).Uint32("gen", generation).Str("action", "adding").Msg("device")
 
 	parsedUrl, err := url.Parse(u)
 	if err != nil {
@@ -256,7 +257,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 	if err == nil {
 		dev.generation = generation
 		lan.devices.Add(dev)
-		utils2.Logger.Info().
+		utils.Logger.Info().
 			Str("key", dev.PK()).
 			Str("endpoint", u).
 			Str("action", "add").
@@ -272,7 +273,7 @@ func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discov
 	// Update the devices that match the
 	for _, dev := range discovered {
 		if err := lan.learnSingleCameraSync(ctx, gen, dev); err != nil {
-			utils2.Logger.Warn().Str("url", dev.GetEndpoint("device")).Err(err).Msg("invalid device discovered")
+			utils.Logger.Warn().Str("url", dev.GetEndpoint("device")).Err(err).Msg("invalid device discovered")
 		}
 	}
 
@@ -292,7 +293,7 @@ func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discov
 
 func (lan *lanAgent) triggerRescanAsync(ctx context.Context) {
 	gen := atomic.AddUint32(&lan.generation, 1)
-	utils2.Logger.Info().Str("action", "rescan").Uint32("gen", gen).Msg("lan")
+	utils.Logger.Info().Str("action", "rescan").Uint32("gen", gen).Msg("lan")
 	for _, itf := range lan.interfaces {
 		itf.TriggerRescanAsync(ctx, gen)
 	}

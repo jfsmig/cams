@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/go/utils"
 	"go.nanomsg.org/mangos/v3"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"go.nanomsg.org/mangos/v3/protocol/push"
+
+	"github.com/jfsmig/cams/go/utils"
 )
 
 func makeSouthRtp(camID string) string  { return "inproc://" + camID + "/MS" }

@@ -5,10 +5,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/juju/errors"
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"github.com/juju/errors"
 )
 
 type UpstreamConfig struct {

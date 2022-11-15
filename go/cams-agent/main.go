@@ -4,9 +4,11 @@ package main
 
 import (
 	"context"
-	utils2 "github.com/jfsmig/cams/go/utils"
+
 	"github.com/spf13/cobra"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
+
+	"github.com/jfsmig/cams/go/utils"
 )
 
 var (
@@ -38,9 +40,9 @@ func main() {
 	}
 
 	if err := cmd.Execute(); err != nil {
-		utils2.Logger.Fatal().Err(err).Str("action", "aborting").Msg("agent")
+		utils.Logger.Fatal().Err(err).Str("action", "aborting").Msg("agent")
 	} else {
-		utils2.Logger.Info().Str("action", "Exiting").Msg("agent")
+		utils.Logger.Info().Str("action", "Exiting").Msg("agent")
 	}
 }
 
@@ -56,9 +58,9 @@ func runAgent(ctx context.Context, cfg AgentConfig) error {
 	upstream.AttachCommandObserver(lan)
 	defer upstream.DetachCommandObserver(lan)
 
-	utils2.Logger.Info().Str("action", "starting").Msg("agent")
+	utils.Logger.Info().Str("action", "starting").Msg("agent")
 
-	utils2.GroupRun(ctx,
+	utils.GroupRun(ctx,
 		func(c context.Context) { upstream.Run(c, lan) },
 		func(c context.Context) { lan.Run(c) },
 	)

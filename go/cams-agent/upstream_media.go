@@ -4,13 +4,15 @@ package main
 
 import (
 	"context"
-	pb2 "github.com/jfsmig/cams/go/api/pb"
-	utils2 "github.com/jfsmig/cams/go/utils"
+	"sync"
+
 	"go.nanomsg.org/mangos/v3/protocol"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"sync"
+
+	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/utils"
 )
 
 type UpstreamMediaCommand string
@@ -52,7 +54,7 @@ func (um *upstreamMedia) CommandPause() { um.control <- upstreamMedia_CommandPau
 func (um *upstreamMedia) CommandShut()  { um.control <- upstreamMedia_CommandShut }
 
 func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
-	utils2.Logger.Trace().Str("action", "start").Str("camera", um.camID).Msg("upstream media")
+	utils.Logger.Trace().Str("action", "start").Str("camera", um.camID).Msg("upstream media")
 
 	if !um.singletonLock.TryLock() {
 		panic("BUG the upstream media is already running")
@@ -62,69 +64,69 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 	// Connect to the internal media bridge fed by the camera
 	socketRtp, err := pull.NewSocket()
 	if err != nil {
-		utils2.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
 		return
 	}
 	defer func() { _ = socketRtp.Close() }()
 	if err = socketRtp.Dial(makeNorthRtp(um.camID)); err != nil {
-		utils2.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
 		return
 	}
 
 	// Connect to the internal media bridge fed by the camera
 	socketRtcp, err := pull.NewSocket()
 	if err != nil {
-		utils2.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
 		return
 	}
 	defer func() { _ = socketRtcp.Close() }()
 	if err = socketRtcp.Dial(makeNorthRtcp(um.camID)); err != nil {
-		utils2.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
 		return
 	}
 
 	// Open a gRPC connection for the upstream
-	client := pb2.NewControllerClient(cnx)
+	client := pb.NewControllerClient(cnx)
 
 	ctx = metadata.AppendToOutgoingContext(ctx,
-		utils2.KeyUser, um.cfg.User,
-		utils2.KeyStream, um.camID)
+		utils.KeyUser, um.cfg.User,
+		utils.KeyStream, um.camID)
 
 	ctrl, err := client.MediaUpload(ctx)
 	if err != nil {
-		utils2.Logger.Warn().Str("action", "open").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream media")
 		return
 	}
 
-	utils2.GroupRun(ctx,
-		func(c context.Context) { upstreamPipeline(c, socketRtp, ctrl, pb2.MediaFrameType_FrameType_RTP) },
-		func(c context.Context) { upstreamPipeline(c, socketRtcp, ctrl, pb2.MediaFrameType_FrameType_RTCP) },
+	utils.GroupRun(ctx,
+		func(c context.Context) { upstreamPipeline(c, socketRtp, ctrl, pb.MediaFrameType_FrameType_RTP) },
+		func(c context.Context) { upstreamPipeline(c, socketRtcp, ctrl, pb.MediaFrameType_FrameType_RTCP) },
 	)
 }
 
-func upstreamPipeline(ctx context.Context, sock protocol.Socket, ctrl pb2.Controller_MediaUploadClient, frameType pb2.MediaFrameType) {
+func upstreamPipeline(ctx context.Context, sock protocol.Socket, ctrl pb.Controller_MediaUploadClient, frameType pb.MediaFrameType) {
 	proto := "rtp"
-	if frameType == pb2.MediaFrameType_FrameType_RTCP {
+	if frameType == pb.MediaFrameType_FrameType_RTCP {
 		proto = "rtcp"
 	}
 
 	for {
 		if err := ctx.Err(); err != nil {
-			utils2.Logger.Warn().Str("action", "interrupted").Err(err).Str("proto", proto).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "interrupted").Err(err).Str("proto", proto).Msg("upstream media")
 			return
 		}
 		msg, err := sock.Recv()
 		if err != nil {
-			utils2.Logger.Warn().Str("action", "consume").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "consume").Err(err).Msg("upstream media")
 			return
 		}
 
-		frame := &pb2.MediaFrame{
+		frame := &pb.MediaFrame{
 			Type:    frameType,
 			Payload: msg,
 		}
 		if err := ctrl.Send(frame); err != nil {
-			utils2.Logger.Warn().Str("action", "send").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "send").Err(err).Msg("upstream media")
 			return
 		}
 	}

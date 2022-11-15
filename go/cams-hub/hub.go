@@ -4,14 +4,16 @@ package main
 
 import (
 	"context"
-	pb2 "github.com/jfsmig/cams/go/api/pb"
-	utils2 "github.com/jfsmig/cams/go/utils"
+	"strings"
+	"sync"
+
 	"github.com/jfsmig/go-bags"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"strings"
-	"sync"
+
+	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/utils"
 )
 
 type AgentID string
@@ -23,11 +25,11 @@ type TLSConfig struct {
 }
 
 type grpcHub struct {
-	pb2.UnimplementedRegistrarServer
-	pb2.UnimplementedControllerServer
-	pb2.UnimplementedViewerServer
+	pb.UnimplementedRegistrarServer
+	pb.UnimplementedControllerServer
+	pb.UnimplementedViewerServer
 
-	config utils2.ServerConfig
+	config utils.ServerConfig
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -40,31 +42,31 @@ type grpcHub struct {
 	agent bags.SortedObj[AgentID, *AgentTwin]
 }
 
-func (hub *grpcHub) Register(ctx context.Context, req *pb2.RegisterRequest) (*pb2.None, error) {
+func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.None, error) {
 	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.User})
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb2.None{}, nil
+		return &pb.None{}, nil
 	}
 }
 
-func (hub *grpcHub) Control(stream pb2.Controller_ControlServer) error {
+func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		err := status.Error(codes.AlreadyExists, "missing metadata")
-		utils2.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
+		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
 		return err
 	}
-	user := md.Get(utils2.KeyUser)[0]
+	user := md.Get(utils.KeyUser)[0]
 
 	if hub.agent.Has(AgentID(user)) {
 		err := status.Error(codes.AlreadyExists, "user agent already running")
-		utils2.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
+		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
 		return err
 	}
 
-	utils2.Logger.Trace().Str("action", "start").Msg("hub control")
+	utils.Logger.Trace().Str("action", "start").Msg("hub control")
 
 	agent := NewAgentTwin(AgentID(user), stream)
 
@@ -81,7 +83,7 @@ func (hub *grpcHub) Control(stream pb2.Controller_ControlServer) error {
 			}
 		case done := <-agent.terminations:
 			agent.medias.Remove(done)
-			utils2.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("terminated")
+			utils.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("terminated")
 		}
 	}
 
@@ -101,20 +103,20 @@ func (hub *grpcHub) Control(stream pb2.Controller_ControlServer) error {
 }
 
 // An upload is starting.
-func (hub *grpcHub) MediaUpload(stream pb2.Controller_MediaUploadServer) error {
+func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 	// Extract the stream identifiers from the channel context
 	var userId, streamId string
 	var err error
-	if userId, err = get[string](stream.Context(), utils2.KeyUser); err != nil {
-		utils2.Logger.Warn().Str("action", "user").Err(err).Msg("hub media")
+	if userId, err = get[string](stream.Context(), utils.KeyUser); err != nil {
+		utils.Logger.Warn().Str("action", "user").Err(err).Msg("hub media")
 		return err
 	}
-	if streamId, err = get[string](stream.Context(), utils2.KeyStream); err != nil {
-		utils2.Logger.Warn().Str("action", "stream").Str("user", userId).Err(err).Msg("hub media")
+	if streamId, err = get[string](stream.Context(), utils.KeyStream); err != nil {
+		utils.Logger.Warn().Str("action", "stream").Str("user", userId).Err(err).Msg("hub media")
 		return err
 	}
 
-	utils2.Logger.Trace().Str("action", "starting").Msg("hub media")
+	utils.Logger.Trace().Str("action", "starting").Msg("hub media")
 
 	// Ensure the digital twin of the agent exists (it has been created at the provisionning step.
 	// and that we create the ownly media upstream for that digital twin.
@@ -135,7 +137,7 @@ func (hub *grpcHub) MediaUpload(stream pb2.Controller_MediaUploadServer) error {
 			case MediaCommandExit:
 				running = false
 			default:
-				utils2.Logger.Warn().Msg("Unexpected command")
+				utils.Logger.Warn().Msg("Unexpected command")
 				running = false
 			}
 		default:
@@ -143,12 +145,12 @@ func (hub *grpcHub) MediaUpload(stream pb2.Controller_MediaUploadServer) error {
 				break
 			} else {
 				switch msg.Type {
-				case pb2.MediaFrameType_FrameType_RTP:
+				case pb.MediaFrameType_FrameType_RTP:
 					// TODO(jfs): push the frame to its listeners
-					utils2.Logger.Info().Str("proto", "rtp").Msg("media")
-				case pb2.MediaFrameType_FrameType_RTCP:
+					utils.Logger.Info().Str("proto", "rtp").Msg("media")
+				case pb.MediaFrameType_FrameType_RTCP:
 					// TODO(jfs): push the frame to its listeners
-					utils2.Logger.Info().Str("proto", "rtcp").Msg("media")
+					utils.Logger.Info().Str("proto", "rtcp").Msg("media")
 				default:
 					running = false
 				}
@@ -161,11 +163,11 @@ func (hub *grpcHub) MediaUpload(stream pb2.Controller_MediaUploadServer) error {
 	return err
 }
 
-func (hub *grpcHub) Play(ctx context.Context, req *pb2.PlayRequest) (*pb2.None, error) {
+func (hub *grpcHub) Play(ctx context.Context, req *pb.PlayRequest) (*pb.None, error) {
 	return nil, status.Error(codes.Unimplemented, "NYI")
 }
 
-func (hub *grpcHub) Pause(ctx context.Context, req *pb2.PauseRequest) (*pb2.None, error) {
+func (hub *grpcHub) Pause(ctx context.Context, req *pb.PauseRequest) (*pb.None, error) {
 	return nil, status.Error(codes.Unimplemented, "NYI")
 }
 

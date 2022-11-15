@@ -4,11 +4,13 @@ package main
 
 import (
 	"context"
-	pb2 "github.com/jfsmig/cams/go/api/pb"
-	utils2 "github.com/jfsmig/cams/go/utils"
+	"net"
+
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
-	"net"
+
+	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/utils"
 )
 
 func main() {
@@ -21,7 +23,7 @@ func main() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			cfg := utils2.ServerConfig{
+			cfg := utils.ServerConfig{
 				ListenAddr: "127.0.0.1:6000",
 				PathCrt:    "",
 				PathKey:    "",
@@ -32,18 +34,18 @@ func main() {
 	}
 
 	if err := cmd.Execute(); err != nil {
-		utils2.Logger.Fatal().Err(err).Msg("Aborting")
+		utils.Logger.Fatal().Err(err).Msg("Aborting")
 	} else {
-		utils2.Logger.Info().Msg("Exiting")
+		utils.Logger.Info().Msg("Exiting")
 	}
 }
 
-func runHub(ctx context.Context, config utils2.ServerConfig) error {
+func runHub(ctx context.Context, config utils.ServerConfig) error {
 	hub := &grpcHub{
 		config: config,
 	}
 
-	utils2.Logger.Info().Str("action", "start").Msg("hub")
+	utils.Logger.Info().Str("action", "start").Msg("hub")
 
 	var cnx *grpc.Server
 	var err error
@@ -62,9 +64,9 @@ func runHub(ctx context.Context, config utils2.ServerConfig) error {
 		return err
 	}
 
-	pb2.RegisterRegistrarServer(cnx, hub)
-	pb2.RegisterControllerServer(cnx, hub)
-	pb2.RegisterViewerServer(cnx, hub)
+	pb.RegisterRegistrarServer(cnx, hub)
+	pb.RegisterControllerServer(cnx, hub)
+	pb.RegisterViewerServer(cnx, hub)
 
 	hub.registrar = NewRegistrarInMem()
 

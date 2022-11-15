@@ -4,16 +4,17 @@ package main
 
 import (
 	"context"
-	pb2 "github.com/jfsmig/cams/go/api/pb"
-	utils2 "github.com/jfsmig/cams/go/utils"
-	"github.com/jfsmig/go-bags"
-	"github.com/juju/errors"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"sync"
 	"time"
 
 	"github.com/aler9/gortsplib"
+	"github.com/jfsmig/go-bags"
+	"github.com/juju/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+
+	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/utils"
 )
 
 type UpstreamCommand string
@@ -66,7 +67,7 @@ func NewUpstreamAgent(cfg AgentConfig) *upstreamAgent {
 func (us *upstreamAgent) PK() string { return "ua" }
 
 func (us *upstreamAgent) Run(ctx context.Context, lan *lanAgent) {
-	utils2.Logger.Debug().Str("action", "start").Msg("upstream")
+	utils.Logger.Debug().Str("action", "start").Msg("upstream")
 
 	if !us.singletonLock.TryLock() {
 		panic("BUG the upstream agent is already running")
@@ -106,12 +107,12 @@ func (us *upstreamAgent) NotifyCameraExpectation(camID string, cmd StreamExpecta
 }
 
 func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
-	utils2.Logger.Trace().Str("action", "start").Msg("upstream")
+	utils.Logger.Trace().Str("action", "start").Msg("upstream")
 
 	registrationTicker := time.Tick(5 * time.Second)
-	client := pb2.NewRegistrarClient(cnx)
+	client := pb.NewRegistrarClient(cnx)
 
-	camSwarm := utils2.NewSwarm(ctx)
+	camSwarm := utils.NewSwarm(ctx)
 	defer camSwarm.Wait()
 	defer camSwarm.Cancel()
 
@@ -121,24 +122,24 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 			return
 
 		case <-registrationTicker:
-			inReq := pb2.RegisterRequest{
-				Id: &pb2.StreamId{
+			inReq := pb.RegisterRequest{
+				Id: &pb.StreamId{
 					User: us.cfg.User,
 					// FIXME(jfs): configure the camera
 				},
 			}
 
 			ctx = metadata.AppendToOutgoingContext(ctx,
-				utils2.KeyUser, us.cfg.User)
+				utils.KeyUser, us.cfg.User)
 
 			_, err := client.Register(ctx, &inReq)
 			if err != nil {
-				utils2.Logger.Warn().Err(err).
+				utils.Logger.Warn().Err(err).
 					Str("action", "register").
 					Msg("upstream registration")
 				return
 			} else {
-				utils2.Logger.Debug().
+				utils.Logger.Debug().
 					Str("action", "register").
 					Msg("upstream registration")
 			}
@@ -149,7 +150,7 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 	}
 }
 
-func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm utils2.Swarm) {
+func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm utils.Swarm) {
 	prefix := cmd[:1]
 	camID := cmd[1:]
 
@@ -157,7 +158,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 	case upstreamAgent_CommandPlay:
 		cam, ok := us.medias.Get(camID)
 		if !ok {
-			utils2.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
+			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
 			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
 		} else {
 			cam.CommandPlay()
@@ -165,7 +166,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 		}
 	case upstreamAgent_CommandStop:
 		if cam, ok := us.medias.Get(camID); !ok {
-			utils2.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
+			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
 			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
 		} else {
 			cam.CommandPause()
@@ -179,7 +180,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 		}
 	case upstreamAgent_CamDown:
 		if cam, ok := us.medias.Get(camID); !ok {
-			utils2.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
+			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
 			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
 		} else {
 			cam.CommandPause()
@@ -187,7 +188,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 		}
 	case upstreamAgent_CamVanished:
 		if cam, ok := us.medias.Get(camID); !ok {
-			utils2.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
+			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
 		} else {
 			us.medias.Remove(camID)
 			cam.CommandShut()
@@ -200,55 +201,55 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 // runControl polls the control stream and forward them in the command channel
 // is the upstreamAgent
 func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) {
-	utils2.Logger.Trace().Str("action", "start").Msg("upstream control")
+	utils.Logger.Trace().Str("action", "start").Msg("upstream control")
 
-	client := pb2.NewControllerClient(cnx)
+	client := pb.NewControllerClient(cnx)
 
 	ctx = metadata.AppendToOutgoingContext(ctx,
-		utils2.KeyUser, us.cfg.User)
+		utils.KeyUser, us.cfg.User)
 
 	ctrl, err := client.Control(ctx)
 	if err != nil {
-		utils2.Logger.Warn().Str("action", "open").Err(err).Msg("upstream control")
+		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream control")
 		return
 	}
 
 	defer func() {
 		if err := ctrl.CloseSend(); err != nil {
-			utils2.Logger.Warn().Str("action", "close").Err(err).Msg("upstream control")
+			utils.Logger.Warn().Str("action", "close").Err(err).Msg("upstream control")
 		}
 	}()
 
 	for {
 		request, err := ctrl.Recv()
 		if err != nil {
-			utils2.Logger.Warn().Str("action", "read").Err(err).Msg("upstream control")
+			utils.Logger.Warn().Str("action", "read").Err(err).Msg("upstream control")
 			return
 		}
 		srv := gortsplib.Server{}
 		srv.Handler = gortsplib.ServerHandlerOnSessionOpenCtx{}
 
 		switch request.Command {
-		case pb2.StreamCommandType_StreamCommandType_PLAY:
+		case pb.StreamCommandType_StreamCommandType_PLAY:
 			us.control <- upstreamAgent_CommandPlay + request.StreamID
-		case pb2.StreamCommandType_StreamCommandType_STOP:
+		case pb.StreamCommandType_StreamCommandType_STOP:
 			us.control <- upstreamAgent_CommandStop + request.StreamID
 		}
 	}
 }
 
 func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, lan *lanAgent) {
-	utils2.Logger.Trace().Str("action", "restart").Str("endpoint", us.cfg.Upstream.Address).Msg("upstream")
+	utils.Logger.Trace().Str("action", "restart").Str("endpoint", us.cfg.Upstream.Address).Msg("upstream")
 
-	cnx, err := utils2.DialInsecure(ctx, us.cfg.Upstream.Address)
+	cnx, err := utils.DialInsecure(ctx, us.cfg.Upstream.Address)
 	if err != nil {
-		utils2.Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
+		utils.Logger.Error().Err(err).Str("action", "dial").Msg("upstream")
 		return
 	}
 	defer cnx.Close()
 
 	us.lan = lan
-	utils2.GroupRun(ctx,
+	utils.GroupRun(ctx,
 		func(c context.Context) { us.runControl(c, cnx) },
 		func(c context.Context) { us.runMain(c, cnx) })
 }

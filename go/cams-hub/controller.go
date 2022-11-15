@@ -3,11 +3,13 @@
 package main
 
 import (
-	"github.com/jfsmig/cams/go/api/pb"
-	"github.com/jfsmig/go-bags"
-	"github.com/juju/errors"
 	"strings"
 	"sync"
+
+	"github.com/jfsmig/go-bags"
+	"github.com/juju/errors"
+
+	"github.com/jfsmig/cams/go/api/pb"
 )
 
 const (

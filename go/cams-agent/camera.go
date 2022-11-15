@@ -4,9 +4,13 @@ package main
 
 import (
 	"context"
+	"log"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/url"
-	utils2 "github.com/jfsmig/cams/go/utils"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/media"
@@ -14,11 +18,8 @@ import (
 	"github.com/use-go/onvif/xsd/onvif"
 	"go.nanomsg.org/mangos/v3/protocol/push"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
-	"sync"
 
-	"log"
-	"strings"
-	"time"
+	"github.com/jfsmig/cams/go/utils"
 )
 
 type CamAgentState uint32
@@ -66,7 +67,7 @@ type LanCamera struct {
 
 	requests chan CamCommand
 
-	group utils2.Swarm
+	group utils.Swarm
 }
 
 func NewCamera(id, endpoint string) (*LanCamera, error) {
@@ -124,7 +125,7 @@ func (cam *LanCamera) Run(ctx context.Context) {
 		Password: password,
 	})
 	if err != nil {
-		utils2.Logger.Error().Err(err).Str("action", "auth").Msg("camera")
+		utils.Logger.Error().Err(err).Str("action", "auth").Msg("camera")
 		return
 	}
 	transport := gortsplib.TransportUDP
@@ -160,16 +161,16 @@ func (cam *LanCamera) StopStream() { cam.requests <- CamCommandPause }
 
 func (cam *LanCamera) runStream(ctx context.Context) {
 	for ctx.Err() == nil {
-		utils2.Logger.Debug().Str("url", cam.endpoint).Str("action", "start").Msg("device")
+		utils.Logger.Debug().Str("url", cam.endpoint).Str("action", "start").Msg("device")
 		err := cam.runStreamOnce(ctx)
 		if err != nil {
-			utils2.Logger.Warn().Str("url", cam.endpoint).Str("action", "done").Err(err).Msg("device")
+			utils.Logger.Warn().Str("url", cam.endpoint).Str("action", "done").Err(err).Msg("device")
 		} else {
 			// Avoid a crazy loop
 			time.Sleep(5 * time.Second)
 		}
 	}
-	utils2.Logger.Info().Str("url", cam.endpoint).Str("action", "done").Msg("device")
+	utils.Logger.Info().Str("url", cam.endpoint).Str("action", "done").Msg("device")
 }
 
 func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
@@ -181,7 +182,7 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 		return errors.Annotate(err, "getMediaUrl")
 	}
 
-	utils2.Logger.Info().Str("host", sourceUrl.Host).Msg("start!")
+	utils.Logger.Info().Str("host", sourceUrl.Host).Msg("start!")
 	if err = cam.rtspClient.Start(sourceUrl.Scheme, sourceUrl.Host); err != nil {
 		return errors.Annotate(err, "start")
 	}
@@ -214,7 +215,7 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 		if err != nil {
 			err = sockRtp.Send(b)
 		}
-		utils2.Logger.Debug().
+		utils.Logger.Debug().
 			Str("proto", "rtp").
 			Int("track", ctx.TrackID).
 			Uint16("seq", ctx.Packet.SequenceNumber).
@@ -228,7 +229,7 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 		if err != nil {
 			err = sockRtcp.Send(b)
 		}
-		utils2.Logger.Debug().
+		utils.Logger.Debug().
 			Str("proto", "rtcp").
 			Int("track", ctx.TrackID).
 			Interface("z", ctx.Packet).
@@ -311,7 +312,7 @@ func (cam *LanCamera) onCmdPlay(ctx context.Context) {
 		fallthrough
 	case CamAgentIdle:
 		cam.State = CamAgentPlaying
-		cam.group = utils2.NewGroup(ctx)
+		cam.group = utils.NewGroup(ctx)
 		cam.group.Run(func(c context.Context) { pipeline(c, makeSouthRtp(cam.ID), makeNorthRtp(cam.ID)) })
 		cam.group.Run(func(c context.Context) { pipeline(c, makeSouthRtcp(cam.ID), makeNorthRtcp(cam.ID)) })
 		cam.group.Run(func(c context.Context) { cam.runStream(c) })
