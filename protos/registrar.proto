@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option go_package = "../api/pb;pb";
+
+import "hub.proto";
+
+package cams.api.hub;
+
+// The service used for authentication and provisioning
+service Registrar {
+  rpc Register(RegisterRequest) returns (None) {}
+}
+
+message RegisterRequest {
+  StreamId id = 1;
+}
