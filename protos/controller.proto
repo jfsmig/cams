@@ -10,7 +10,7 @@ import "hub.proto";
 // It is all about producing / uploading media streams
 service Controller {
   // Stream of commands from the server to the client
-  rpc Control(stream ControlReply) returns (stream ControlRequest) {}
+  rpc Control(stream None) returns (stream ControlRequest) {}
 
   // Stream of media frames from the client to the server
   // There should be at most one long-standing call to MediaUpload per agent connected
@@ -26,12 +26,6 @@ enum StreamCommandType {
 
 // What should be done
 message ControlRequest {
-  string streamID = 1;
-  StreamCommandType command = 2;
-}
-
-// What has been done
-message ControlReply {
   string streamID = 1;
   StreamCommandType command = 2;
 }

@@ -4,7 +4,7 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/utils"
+	"github.com/jfsmig/cams/go/utils"
 	goonvif "github.com/use-go/onvif"
 )
 

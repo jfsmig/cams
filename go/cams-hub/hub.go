@@ -4,14 +4,12 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/api/pb"
-	"github.com/jfsmig/cams/defs"
-	"github.com/jfsmig/cams/utils"
+	pb2 "github.com/jfsmig/cams/go/api/pb"
+	utils2 "github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/go-bags"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"net"
 	"strings"
 	"sync"
 )
@@ -25,10 +23,11 @@ type TLSConfig struct {
 }
 
 type grpcHub struct {
-	pb.UnimplementedRegistrarServer
-	pb.UnimplementedControllerServer
+	pb2.UnimplementedRegistrarServer
+	pb2.UnimplementedControllerServer
+	pb2.UnimplementedViewerServer
 
-	config utils.ServerConfig
+	config utils2.ServerConfig
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -41,55 +40,31 @@ type grpcHub struct {
 	agent bags.SortedObj[AgentID, *AgentTwin]
 }
 
-func runHub(ctx context.Context, config utils.ServerConfig) error {
-	hub := &grpcHub{
-		config: config,
-	}
-
-	utils.Logger.Info().Str("action", "start").Msg("hub")
-
-	var cnx *grpc.Server
-	var err error
-
-	if len(config.PathCrt) <= 0 || len(config.PathKey) <= 0 {
-		cnx, err = hub.config.ServeInsecure()
-	} else {
-		cnx, err = hub.config.ServeTLS()
-	}
-	if err != nil {
-		return err
-	}
-
-	listener, err := net.Listen("tcp", hub.config.ListenAddr)
-	if err != nil {
-		return err
-	}
-
-	pb.RegisterRegistrarServer(cnx, hub)
-	pb.RegisterControllerServer(cnx, hub)
-
-	hub.registrar = NewRegistrarInMem()
-
-	return cnx.Serve(listener)
-}
-
-func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.None, error) {
+func (hub *grpcHub) Register(ctx context.Context, req *pb2.RegisterRequest) (*pb2.None, error) {
 	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.User})
 	if err != nil {
 		return nil, err
 	} else {
-		return &pb.None{}, nil
+		return &pb2.None{}, nil
 	}
 }
 
-func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
-	user, err := get[string](stream.Context(), "user")
-	if err != nil {
-		return status.Error(codes.InvalidArgument, "no agent id")
+func (hub *grpcHub) Control(stream pb2.Controller_ControlServer) error {
+	md, ok := metadata.FromIncomingContext(stream.Context())
+	if !ok {
+		err := status.Error(codes.AlreadyExists, "missing metadata")
+		utils2.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
+		return err
 	}
+	user := md.Get(utils2.KeyUser)[0]
+
 	if hub.agent.Has(AgentID(user)) {
-		return status.Error(codes.AlreadyExists, "agent known")
+		err := status.Error(codes.AlreadyExists, "user agent already running")
+		utils2.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
+		return err
 	}
+
+	utils2.Logger.Trace().Str("action", "start").Msg("hub control")
 
 	agent := NewAgentTwin(AgentID(user), stream)
 
@@ -106,7 +81,7 @@ func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 			}
 		case done := <-agent.terminations:
 			agent.medias.Remove(done)
-			utils.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("terminated")
+			utils2.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("terminated")
 		}
 	}
 
@@ -126,16 +101,20 @@ func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 }
 
 // An upload is starting.
-func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
+func (hub *grpcHub) MediaUpload(stream pb2.Controller_MediaUploadServer) error {
 	// Extract the stream identifiers from the channel context
 	var userId, streamId string
 	var err error
-	if userId, err = get[string](stream.Context(), defs.KeyUser); err != nil {
+	if userId, err = get[string](stream.Context(), utils2.KeyUser); err != nil {
+		utils2.Logger.Warn().Str("action", "user").Err(err).Msg("hub media")
 		return err
 	}
-	if streamId, err = get[string](stream.Context(), defs.KeyStream); err != nil {
+	if streamId, err = get[string](stream.Context(), utils2.KeyStream); err != nil {
+		utils2.Logger.Warn().Str("action", "stream").Str("user", userId).Err(err).Msg("hub media")
 		return err
 	}
+
+	utils2.Logger.Trace().Str("action", "starting").Msg("hub media")
 
 	// Ensure the digital twin of the agent exists (it has been created at the provisionning step.
 	// and that we create the ownly media upstream for that digital twin.
@@ -156,7 +135,7 @@ func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 			case MediaCommandExit:
 				running = false
 			default:
-				utils.Logger.Warn().Msg("Unexpected command")
+				utils2.Logger.Warn().Msg("Unexpected command")
 				running = false
 			}
 		default:
@@ -164,12 +143,12 @@ func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 				break
 			} else {
 				switch msg.Type {
-				case pb.MediaFrameType_FrameType_RTP:
+				case pb2.MediaFrameType_FrameType_RTP:
 					// TODO(jfs): push the frame to its listeners
-					utils.Logger.Info().Str("proto", "rtp").Msg("media")
-				case pb.MediaFrameType_FrameType_RTCP:
+					utils2.Logger.Info().Str("proto", "rtp").Msg("media")
+				case pb2.MediaFrameType_FrameType_RTCP:
 					// TODO(jfs): push the frame to its listeners
-					utils.Logger.Info().Str("proto", "rtcp").Msg("media")
+					utils2.Logger.Info().Str("proto", "rtcp").Msg("media")
 				default:
 					running = false
 				}
@@ -182,12 +161,20 @@ func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 	return err
 }
 
+func (hub *grpcHub) Play(ctx context.Context, req *pb2.PlayRequest) (*pb2.None, error) {
+	return nil, status.Error(codes.Unimplemented, "NYI")
+}
+
+func (hub *grpcHub) Pause(ctx context.Context, req *pb2.PauseRequest) (*pb2.None, error) {
+	return nil, status.Error(codes.Unimplemented, "NYI")
+}
+
 func get[T any](ctx context.Context, k string) (T, error) {
 	var zero T
 	if v := ctx.Value(k); v == nil {
-		return zero, status.Error(codes.InvalidArgument, "Missing field")
+		return zero, status.Error(codes.InvalidArgument, "missing")
 	} else if v, ok := v.(T); !ok {
-		return zero, status.Error(codes.InvalidArgument, "Invalid field")
+		return zero, status.Error(codes.InvalidArgument, "zeroed")
 	} else {
 		return v, nil
 	}

@@ -3,7 +3,7 @@
 package main
 
 import (
-	"github.com/jfsmig/cams/api/pb"
+	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
 	"strings"

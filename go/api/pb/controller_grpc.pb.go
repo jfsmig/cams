@@ -48,7 +48,7 @@ func (c *controllerClient) Control(ctx context.Context, opts ...grpc.CallOption)
 }
 
 type Controller_ControlClient interface {
-	Send(*ControlReply) error
+	Send(*None) error
 	Recv() (*ControlRequest, error)
 	grpc.ClientStream
 }
@@ -57,7 +57,7 @@ type controllerControlClient struct {
 	grpc.ClientStream
 }
 
-func (x *controllerControlClient) Send(m *ControlReply) error {
+func (x *controllerControlClient) Send(m *None) error {
 	return x.ClientStream.SendMsg(m)
 }
 
@@ -145,7 +145,7 @@ func _Controller_Control_Handler(srv interface{}, stream grpc.ServerStream) erro
 
 type Controller_ControlServer interface {
 	Send(*ControlRequest) error
-	Recv() (*ControlReply, error)
+	Recv() (*None, error)
 	grpc.ServerStream
 }
 
@@ -157,8 +157,8 @@ func (x *controllerControlServer) Send(m *ControlRequest) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *controllerControlServer) Recv() (*ControlReply, error) {
-	m := new(ControlReply)
+func (x *controllerControlServer) Recv() (*None, error) {
+	m := new(None)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
