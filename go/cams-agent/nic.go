@@ -27,11 +27,11 @@ func (ls *Nic) PK() string { return ls.ItfName }
 type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif.Device)
 
 func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
-	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "start").Msg("interface")
+	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "start").Msg("nic")
 	for {
 		select {
 		case <-ctx.Done():
-			utils.Logger.Info().Str("name", ls.ItfName).Str("action", "stop").Msg("interface")
+			utils.Logger.Info().Str("name", ls.ItfName).Str("action", "stop").Msg("nic")
 			close(ls.trigger)
 			return
 		case generation := <-ls.trigger:
@@ -39,7 +39,7 @@ func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 			if err == nil {
 				register(ctx, generation, devices)
 			} else {
-				utils.Logger.Warn().Str("action", "rescan").Err(err).Msg("interface")
+				utils.Logger.Warn().Str("action", "rescan").Err(err).Msg("nic")
 			}
 		}
 	}

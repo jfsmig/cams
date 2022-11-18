@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
 
 	"go.nanomsg.org/mangos/v3/protocol"
 	"go.nanomsg.org/mangos/v3/protocol/pull"
@@ -67,12 +68,6 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
 		return
 	}
-	defer func() { _ = socketRtp.Close() }()
-	if err = socketRtp.Dial(makeNorthRtp(um.camID)); err != nil {
-		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
-		return
-	}
-
 	// Connect to the internal media bridge fed by the camera
 	socketRtcp, err := pull.NewSocket()
 	if err != nil {
@@ -80,9 +75,28 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 		return
 	}
 	defer func() { _ = socketRtcp.Close() }()
-	if err = socketRtcp.Dial(makeNorthRtcp(um.camID)); err != nil {
-		utils.Logger.Warn().Str("action", "north dial").Err(err).Msg("upstream media")
+
+	// Try to connect to the internal media bridge fed by the camera, until it either works or get cancelled
+	for ctx.Err() == nil {
+		if err = socketRtp.Dial(makeNorthRtp(um.camID)); err != nil {
+			utils.Logger.Warn().Str("action", "north rtp dial").Err(err).Msg("upstream media")
+			time.Sleep(200 * time.Millisecond)
+		} else {
+			break
+		}
+	}
+	for ctx.Err() == nil {
+		if err = socketRtcp.Dial(makeNorthRtcp(um.camID)); err != nil {
+			utils.Logger.Warn().Str("action", "north rtcp dial").Err(err).Msg("upstream media")
+			time.Sleep(200 * time.Millisecond)
+		} else {
+			break
+		}
+	}
+	if ctx.Err() != nil {
 		return
+	} else {
+		utils.Logger.Trace().Str("action", "north dial").Msg("upstream media")
 	}
 
 	// Open a gRPC connection for the upstream
@@ -92,10 +106,20 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 		utils.KeyUser, um.cfg.User,
 		utils.KeyStream, um.camID)
 
-	ctrl, err := client.MediaUpload(ctx)
-	if err != nil {
-		utils.Logger.Warn().Str("action", "open").Err(err).Msg("upstream media")
+	var ctrl pb.Controller_MediaUploadClient
+	for ctx.Err() == nil {
+		ctrl, err = client.MediaUpload(ctx)
+		if err != nil {
+			utils.Logger.Warn().Str("action", "grpc dial").Err(err).Msg("upstream media")
+			time.Sleep(500 * time.Millisecond)
+		} else {
+			break
+		}
+	}
+	if ctx.Err() != nil {
 		return
+	} else {
+		utils.Logger.Trace().Str("action", "grpc dial").Msg("upstream media")
 	}
 
 	utils.GroupRun(ctx,

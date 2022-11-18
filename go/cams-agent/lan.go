@@ -58,7 +58,7 @@ type CameraObserver interface {
 
 func NewLanAgent(cfg AgentConfig) *lanAgent {
 	lan := &lanAgent{
-		ScanPeriod:  5 * time.Second,
+		ScanPeriod:  1 * time.Minute,
 		CheckPeriod: 30 * time.Second,
 
 		devices:    make([]*LanCamera, 0),
@@ -142,7 +142,7 @@ func (lan *lanAgent) Run(ctx context.Context) {
 	// Perform a first discovery of the local interfaces.
 	// No need to do it periodically, interfaces are unlikely plug & play
 	if err := lan.discoverNics(); err != nil {
-		utils.Logger.Error().Err(err).Msg("discovery")
+		utils.Logger.Error().Err(err).Msg("disc")
 		return
 	}
 
@@ -151,7 +151,9 @@ func (lan *lanAgent) Run(ctx context.Context) {
 		lan.learnAllCamerasSync(ctx0, gen, devs)
 	}
 	for _, itf := range lan.interfaces {
-		lan.nicsGroup.Run(func(c context.Context) { itf.RunRescanLoop(c, fn) })
+		func(itf *Nic) {
+			lan.nicsGroup.Run(func(c context.Context) { itf.RunRescanLoop(c, fn) })
+		}(itf)
 	}
 
 	lan.nicsGroup.Run(func(c context.Context) { lan.RunTimers(c) })
@@ -163,6 +165,16 @@ func (lan *lanAgent) Run(ctx context.Context) {
 	// Then ensure no camera goroutine is leaked running in the background
 	lan.camsSwarm.Cancel()
 	lan.camsSwarm.Wait()
+}
+
+func (lan *lanAgent) Cameras() []*LanCamera {
+	lan.dataLock.Lock()
+	defer lan.dataLock.Unlock()
+	out := make([]*LanCamera, 0, len(lan.devices))
+	for _, cam := range lan.devices {
+		out = append(out, cam)
+	}
+	return out
 }
 
 // RunTimers runs the main loop of the agent to trigger periodical actions
@@ -188,14 +200,14 @@ func (lan *lanAgent) discoverNics() error {
 		return errors.Trace(err)
 	}
 
-	utils.Logger.Trace().Strs("interfaces", itfs).Msg("discovery")
+	utils.Logger.Trace().Strs("interfaces", itfs).Msg("disc")
 
 	for _, itf := range itfs {
 		lan.maybeRegisterInterface(itf)
 	}
 
 	for _, itf := range lan.interfacesStatic {
-		utils.Logger.Info().Str("itf", itf).Str("action", "force").Msg("discovery")
+		utils.Logger.Info().Str("itf", itf).Str("action", "force").Msg("disc")
 		lan.registerInterface(itf)
 	}
 	return nil
@@ -212,14 +224,14 @@ func (lan *lanAgent) maybeRegisterInterface(itf string) {
 			pattern = pattern[1:]
 		}
 		if match, err := regexp.MatchString(pattern, itf); err != nil {
-			utils.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("discovery")
+			utils.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("disc")
 		} else if !match {
 			continue
 		} else if !not {
-			utils.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("discovery")
+			utils.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("disc")
 			lan.registerInterface(itf)
 		} else {
-			utils.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("discovery")
+			utils.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("disc")
 		}
 		return
 	}

@@ -54,7 +54,7 @@ func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.
 func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		err := status.Error(codes.AlreadyExists, "missing metadata")
+		err := status.Error(codes.InvalidArgument, "missing metadata")
 		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
 		return err
 	}
@@ -104,19 +104,18 @@ func (hub *grpcHub) Control(stream pb.Controller_ControlServer) error {
 
 // An upload is starting.
 func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
-	// Extract the stream identifiers from the channel context
-	var userId, streamId string
-	var err error
-	if userId, err = get[string](stream.Context(), utils.KeyUser); err != nil {
-		utils.Logger.Warn().Str("action", "user").Err(err).Msg("hub media")
+	md, ok := metadata.FromIncomingContext(stream.Context())
+	if !ok {
+		err := status.Error(codes.InvalidArgument, "missing metadata")
+		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub media")
 		return err
 	}
-	if streamId, err = get[string](stream.Context(), utils.KeyStream); err != nil {
-		utils.Logger.Warn().Str("action", "stream").Str("user", userId).Err(err).Msg("hub media")
-		return err
-	}
+	userId := md.Get(utils.KeyUser)[0]
+	streamId := md.Get(utils.KeyStream)[0]
 
-	utils.Logger.Trace().Str("action", "starting").Msg("hub media")
+	utils.Logger.Trace().Str("action", "starting").
+		Str("user", userId).Str("cam", streamId).
+		Msg("hub media")
 
 	// Ensure the digital twin of the agent exists (it has been created at the provisionning step.
 	// and that we create the ownly media upstream for that digital twin.
@@ -147,10 +146,10 @@ func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 				switch msg.Type {
 				case pb.MediaFrameType_FrameType_RTP:
 					// TODO(jfs): push the frame to its listeners
-					utils.Logger.Info().Str("proto", "rtp").Msg("media")
+					utils.Logger.Info().Str("proto", "rtp").Msg("hub media")
 				case pb.MediaFrameType_FrameType_RTCP:
 					// TODO(jfs): push the frame to its listeners
-					utils.Logger.Info().Str("proto", "rtcp").Msg("media")
+					utils.Logger.Info().Str("proto", "rtcp").Msg("hub media")
 				default:
 					running = false
 				}
@@ -164,10 +163,12 @@ func (hub *grpcHub) MediaUpload(stream pb.Controller_MediaUploadServer) error {
 }
 
 func (hub *grpcHub) Play(ctx context.Context, req *pb.PlayRequest) (*pb.None, error) {
+	utils.Logger.Info().Str("action", "play").Msg("view")
 	return nil, status.Error(codes.Unimplemented, "NYI")
 }
 
 func (hub *grpcHub) Pause(ctx context.Context, req *pb.PauseRequest) (*pb.None, error) {
+	utils.Logger.Info().Str("action", "pause").Msg("view")
 	return nil, status.Error(codes.Unimplemented, "NYI")
 }
 

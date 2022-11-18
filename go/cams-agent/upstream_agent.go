@@ -47,6 +47,9 @@ type upstreamAgent struct {
 
 	observers bags.SortedObj[string, CommandObserver]
 	medias    bags.SortedObj[string, UpstreamMedia]
+
+	// One "true" entry means that the hub expects that stream to be played
+	expectations map[string]bool
 }
 
 type CommandObserver interface {
@@ -122,28 +125,26 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 			return
 
 		case <-registrationTicker:
-			inReq := pb.RegisterRequest{
-				Id: &pb.StreamId{
-					User: us.cfg.User,
-					// FIXME(jfs): configure the camera
-				},
-			}
-
 			ctx = metadata.AppendToOutgoingContext(ctx,
 				utils.KeyUser, us.cfg.User)
-
-			_, err := client.Register(ctx, &inReq)
-			if err != nil {
-				utils.Logger.Warn().Err(err).
-					Str("action", "register").
-					Msg("upstream registration")
-				return
-			} else {
-				utils.Logger.Debug().
-					Str("action", "register").
-					Msg("upstream registration")
+			for _, cam := range us.lan.Cameras() {
+				inReq := pb.RegisterRequest{
+					Id: &pb.StreamId{
+						User:   us.cfg.User,
+						Stream: cam.ID,
+					},
+				}
+				if _, err := client.Register(ctx, &inReq); err != nil {
+					utils.Logger.Warn().Err(err).
+						Str("action", "register").
+						Msg("upstream registration")
+					return
+				} else {
+					utils.Logger.Debug().
+						Str("action", "register").
+						Msg("upstream registration")
+				}
 			}
-
 		case cmd := <-us.control:
 			us.onCommand(cmd, cnx, camSwarm)
 		}
@@ -155,30 +156,35 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 	camID := cmd[1:]
 
 	switch prefix {
-	case upstreamAgent_CommandPlay:
+	case upstreamAgent_CommandPlay: // From the hub
+		us.expectations[camID] = true
+		us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPlay)
 		cam, ok := us.medias.Get(camID)
 		if !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
-			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
+			// FIXME(jfs): command for an inexistant camera. Maybe need to manage a rogue cloud service
 		} else {
 			cam.CommandPlay()
-			us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPlay)
 		}
-	case upstreamAgent_CommandStop:
+	case upstreamAgent_CommandStop: // From the hub
+		us.expectations[camID] = false
+		us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPause)
 		if cam, ok := us.medias.Get(camID); !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
-			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
+			// FIXME(jfs): command for an inexistant camera. Maybe need to manage a rogue cloud service
 		} else {
 			cam.CommandPause()
-			us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPause)
 		}
-	case upstreamAgent_CamUp:
+	case upstreamAgent_CamUp: // From the lan
 		if _, ok := us.medias.Get(camID); !ok {
 			um := NewUpstreamMedia(camID, us.cfg)
 			us.medias.Add(um)
+		}
+		if us.expectations[camID] {
+			um, _ := us.medias.Get(camID)
 			camSwarm.Run(func(c context.Context) { um.Run(c, cnx) })
 		}
-	case upstreamAgent_CamDown:
+	case upstreamAgent_CamDown: // From the lan
 		if cam, ok := us.medias.Get(camID); !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
 			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
@@ -186,7 +192,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 			cam.CommandPause()
 			us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPause)
 		}
-	case upstreamAgent_CamVanished:
+	case upstreamAgent_CamVanished: // From the lan
 		if cam, ok := us.medias.Get(camID); !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("upstream control")
 		} else {
