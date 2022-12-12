@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/cams/go/utils"
+	"github.com/juju/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -13,24 +14,27 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		err := status.Error(codes.InvalidArgument, "missing metadata")
-		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
+		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub ctrl")
 		return err
 	}
 	user := md.Get(utils.KeyUser)[0]
 
 	if hub.agent.Has(AgentID(user)) {
 		err := status.Error(codes.AlreadyExists, "user agent already running")
-		utils.Logger.Warn().Str("action", "check").Err(err).Msg("hub control")
+		utils.Logger.Warn().Str("user", user).Str("action", "check").Err(err).Msg("hub ctrl")
 		return err
 	}
 
-	utils.Logger.Trace().Str("action", "start").Msg("hub control")
+	utils.Logger.Trace().Str("user", user).Str("action", "start").Msg("hub ctrl")
 
 	agent := NewAgentTwin(AgentID(user), stream)
 
 	// wait for commands from outside, to propagate to the agent
 	for running := true; running; {
 		select {
+		case <-stream.Context().Done():
+			utils.Logger.Info().Str("user", user).Str("action", "shut").Msg("hub ctrl")
+			running = false
 		case cmd := <-agent.requests:
 			tokens := strings.Split(cmd, " ")
 			switch tokens[0] {
@@ -43,7 +47,7 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 			}
 		case done := <-agent.terminations:
 			agent.medias.Remove(done)
-			utils.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("terminated")
+			utils.Logger.Info().Str("user", user).Str("stream", string(done)).Msg("hub ctrl")
 		}
 	}
 
@@ -89,9 +93,19 @@ func (hub *grpcHub) Media(stream pb.Downstream_MediaUploadServer) error {
 		return status.Error(codes.AlreadyExists, "stream found")
 	}
 
+	receiverDone := make(chan error, 0)
+	mediaSource := make(chan *pb.DownstreamMediaFrame)
+
+	go hub.recvMedia(stream, receiverDone, mediaSource)
+	go hub.handleMedia(agent, upstream, receiverDone, mediaSource)
+
 	for running := true; running; {
 		select {
+		case <-stream.Context().Done():
+			utils.Logger.Warn().Str("action", "done").Msg("hub")
+			running = false
 		case req := <-upstream.requests:
+			utils.Logger.Warn().Str("action", "req").Msg("hub")
 			switch req {
 			case MediaCommandExit:
 				running = false
@@ -99,11 +113,40 @@ func (hub *grpcHub) Media(stream pb.Downstream_MediaUploadServer) error {
 				utils.Logger.Warn().Msg("Unexpected command")
 				running = false
 			}
-		default:
-			if msg, err := stream.Recv(); err != nil {
-				break
+		}
+	}
+
+	_ = stream.SendMsg(&pb.None{})
+	return nil
+}
+
+func (hub *grpcHub) recvMedia(stream pb.Downstream_MediaUploadServer, done chan error, media chan *pb.DownstreamMediaFrame) {
+	defer close(done)
+	defer close(media)
+	for {
+		if msg, err := stream.Recv(); err != nil {
+			utils.Logger.Warn().Str("action", "error").Msg("hub")
+			done <- err
+			return
+		} else {
+			utils.Logger.Warn().Str("action", "frame").Msg("hub")
+			media <- msg
+		}
+	}
+}
+
+func (hub *grpcHub) handleMedia(agent *AgentTwin, upstream *agentStream, done chan error, media chan *pb.DownstreamMediaFrame) {
+	defer func() { agent.terminations <- upstream.PK() }()
+
+	for {
+		select {
+		case frame, ok := <-media:
+			if !ok {
+				utils.Logger.Warn().Str("action", "close").Msg("hub media")
+				return
 			} else {
-				switch msg.Type {
+				utils.Logger.Warn().Str("action", "recv").Msg("hub media")
+				switch frame.Type {
 				case pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTP:
 					// TODO(jfs): push the frame to its listeners
 					utils.Logger.Info().Str("proto", "rtp").Msg("hub media")
@@ -111,13 +154,12 @@ func (hub *grpcHub) Media(stream pb.Downstream_MediaUploadServer) error {
 					// TODO(jfs): push the frame to its listeners
 					utils.Logger.Info().Str("proto", "rtcp").Msg("hub media")
 				default:
-					running = false
+					done <- errors.New("unexpected control message type")
 				}
 			}
+		case err, _ := <-done:
+			utils.Logger.Warn().Str("action", "abort").Err(err).Msg("hub media")
+			return
 		}
 	}
-
-	// Close the subscribers
-	agent.terminations <- upstream.PK()
-	return err
 }

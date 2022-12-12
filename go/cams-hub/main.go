@@ -50,13 +50,13 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 
 	utils.Logger.Info().Str("action", "start").Msg("hub")
 
-	var cnx *grpc.Server
+	var server *grpc.Server
 	var err error
 
 	if len(config.PathCrt) <= 0 || len(config.PathKey) <= 0 {
-		cnx, err = hub.config.ServeInsecure()
+		server, err = hub.config.ServeInsecure()
 	} else {
-		cnx, err = hub.config.ServeTLS()
+		server, err = hub.config.ServeTLS()
 	}
 	if err != nil {
 		return err
@@ -66,18 +66,20 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 	if err != nil {
 		return err
 	}
+	defer listener.Close()
 
 	utils.SwarmRun(ctx,
 		func(c context.Context) {
 			<-c.Done()
-			cnx.GracefulStop()
+			utils.Logger.Info().Str("action", "kill").Msg("hub")
+			server.GracefulStop()
 		},
 		func(c context.Context) {
-			pb.RegisterRegistrarServer(cnx, hub)
-			pb.RegisterDownstreamServer(cnx, hub)
-			pb.RegisterViewerServer(cnx, hub)
+			pb.RegisterRegistrarServer(server, hub)
+			pb.RegisterDownstreamServer(server, hub)
+			pb.RegisterViewerServer(server, hub)
 			hub.registrar = NewRegistrarInMem()
-			if err := cnx.Serve(listener); err != nil {
+			if err := server.Serve(listener); err != nil {
 				utils.Logger.Warn().Err(err).Msg("grpc")
 			}
 		},
