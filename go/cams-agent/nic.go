@@ -18,7 +18,7 @@ type Nic struct {
 func NewNIC(name string) *Nic {
 	return &Nic{
 		ItfName: name,
-		trigger: make(chan uint32, 8),
+		trigger: make(chan uint32, 1),
 	}
 }
 
@@ -27,19 +27,21 @@ func (ls *Nic) PK() string { return ls.ItfName }
 type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif.Device)
 
 func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
-	utils.Logger.Debug().Str("name", ls.ItfName).Str("action", "start").Msg("nic")
+	utils.Logger.Debug().Str("itf", ls.ItfName).Str("action", "start").Msg("nic")
 	for {
 		select {
 		case <-ctx.Done():
-			utils.Logger.Info().Str("name", ls.ItfName).Str("action", "stop").Msg("nic")
+			utils.Logger.Info().Str("itf", ls.ItfName).Str("action", "stop").Msg("nic")
 			close(ls.trigger)
 			return
 		case generation := <-ls.trigger:
+			utils.Logger.Trace().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 			devices, err := goonvif.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
 			if err == nil {
+				utils.Logger.Trace().Str("action", "rescan").Int("devices", len(devices)).Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 				register(ctx, generation, devices)
 			} else {
-				utils.Logger.Warn().Str("action", "rescan").Err(err).Msg("nic")
+				utils.Logger.Warn().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Err(err).Msg("nic")
 			}
 		}
 	}
@@ -51,7 +53,9 @@ func (ls *Nic) TriggerRescanAsync(ctx context.Context, generation uint32) {
 		// generate no trigger if waiting for an exit
 	case ls.trigger <- generation:
 		// try to write a trigger token but ...
+		utils.Logger.Info().Str("action", "rescan triggered").Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 	default:
+		utils.Logger.Warn().Str("action", "rescan avoided").Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 		// ... never wait if there are already pending trigger tokens
 	}
 }

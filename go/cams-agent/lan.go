@@ -99,7 +99,7 @@ func (lan *lanAgent) UpdateStreamExpectation(camId string, cmd StreamExpectation
 	// Locate the camera
 	cam := func(camId string) *LanCamera {
 		lan.dataLock.Lock()
-		defer lan.dataLock.Lock()
+		defer lan.dataLock.Unlock()
 		cam, _ := lan.devices.Get(camId)
 		return cam
 	}(camId)
@@ -135,9 +135,12 @@ func (lan *lanAgent) Run(ctx context.Context) {
 	utils.Logger.Info().Str("action", "start").Msg("lan")
 
 	// Cameras may come ang go, so a simple goroutine swarm if enough.
-	// This is not the case for network interfaces that are rather stable.
-	lan.nicsGroup = utils.NewGroup(ctx)
 	lan.camsSwarm = utils.NewSwarm(ctx)
+	defer lan.camsSwarm.Cancel()
+
+	// ... This is not the case for network interfaces that are rather stable.
+	lan.nicsGroup = utils.NewGroup(ctx)
+	defer lan.nicsGroup.Cancel()
 
 	// Perform a first discovery of the local interfaces.
 	// No need to do it periodically, interfaces are unlikely plug & play
@@ -158,9 +161,13 @@ func (lan *lanAgent) Run(ctx context.Context) {
 
 	lan.nicsGroup.Run(func(c context.Context) { lan.RunTimers(c) })
 
+	utils.Logger.Info().Str("action", "wait nics").Msg("lan")
+
 	// Wait for the discovery goroutines to stop, this will happen until a strong
 	// error condition occurs.
 	lan.nicsGroup.Wait()
+
+	utils.Logger.Info().Str("action", "wait cams").Msg("lan")
 
 	// Then ensure no camera goroutine is leaked running in the background
 	lan.camsSwarm.Cancel()
@@ -253,7 +260,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 	}
 
 	lan.dataLock.Lock()
-	defer lan.dataLock.Lock()
+	defer lan.dataLock.Unlock()
 
 	// If the camera is already know, let's just update its generation counter
 	devInPlace, ok := lan.devices.Get(k)
@@ -289,23 +296,55 @@ func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discov
 		}
 	}
 
+	toBePurged := lan.camsToBePurged(gen)
+
+	utils.Logger.Trace().Str("action", "purge").Interface("count", len(toBePurged)).Msg("lan")
+	for _, dev := range toBePurged {
+		lan.dataLock.Lock()
+		lan.devices.Remove(dev.PK())
+		lan.Notify(dev.PK(), CameraState_Offline)
+		dev.StopStream()
+		lan.dataLock.Unlock()
+	}
+}
+
+func (lan *lanAgent) camsToBePurged(gen uint32) []*LanCamera {
+	out := make([]*LanCamera, 0)
+
 	lan.dataLock.Lock()
 	defer lan.dataLock.Unlock()
 
 	// Unregister and shut the devices from older generations
 	for i := len(lan.devices); i > 0; i-- {
 		dev := lan.devices[i-1]
-		if dev.generation < (gen - lan.GraceGenerations) {
-			lan.devices.Remove(dev.PK())
-			lan.Notify(dev.PK(), CameraState_Offline)
-			dev.StopStream()
+		if delta(gen, dev.generation) < lan.GraceGenerations {
+			out = append(out, dev)
 		}
+	}
+
+	return out
+}
+
+type Unsigned interface {
+	uint | uint32 | uint16 | uint8
+}
+
+func maxValue[T Unsigned]() T {
+	var zero T
+	return zero - 1
+}
+
+func delta[T Unsigned](hi, lo T) T {
+	if hi >= lo {
+		return hi - lo
+	} else {
+		return hi - lo + maxValue[T]()
 	}
 }
 
 func (lan *lanAgent) triggerRescanAsync(ctx context.Context) {
 	gen := atomic.AddUint32(&lan.generation, 1)
-	utils.Logger.Info().Str("action", "rescan").Uint32("gen", gen).Msg("lan")
+	utils.Logger.Trace().Str("action", "rescan").Uint32("gen", gen).Msg("lan")
 	for _, itf := range lan.interfaces {
 		itf.TriggerRescanAsync(ctx, gen)
 	}

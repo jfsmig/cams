@@ -15,3 +15,61 @@ message StreamId {
 }
 
 message None {}
+
+// The service dedicated to the agents
+// It is all about producing / uploading media streams
+service Downstream {
+  // Stream of commands from the server to the client
+  rpc Control(stream None) returns (stream DownstreamControlRequest) {}
+
+  // Stream of media frames from the client to the server
+  // There should be at most one long-standing call to MediaUpload per agent connected
+  // to the cloud.
+  rpc MediaUpload(stream DownstreamMediaFrame) returns (None) {}
+}
+
+enum DownstreamCommandType {
+    DOWNSTREAM_COMMAND_TYPE_UNSPECIFIED = 0;
+    DOWNSTREAM_COMMAND_TYPE_PLAY = 1;
+    DOWNSTREAM_COMMAND_TYPE_STOP = 2;
+}
+
+// What should be done
+message DownstreamControlRequest {
+  string streamID = 1;
+  DownstreamCommandType command = 2;
+}
+
+enum DownstreamMediaFrameType {
+  DOWNSTREAM_MEDIA_FRAME_TYPE_UNSPECIFIED = 0;
+  DOWNSTREAM_MEDIA_FRAME_TYPE_RTP = 1;
+  DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP = 2;
+}
+
+message DownstreamMediaFrame {
+  DownstreamMediaFrameType type = 2;
+  bytes payload = 3;
+}
+
+// The service used for authentication and provisioning
+service Registrar {
+  rpc Register(RegisterRequest) returns (None) {}
+}
+
+message RegisterRequest {
+  StreamId id = 1;
+}
+
+// The service used for authentication and provisioning
+service Viewer {
+  rpc Play(PlayRequest) returns (None) {}
+  rpc Pause(PauseRequest) returns (None) {}
+}
+
+message PlayRequest {
+  StreamId id = 1;
+}
+
+message PauseRequest {
+  StreamId id = 1;
+}

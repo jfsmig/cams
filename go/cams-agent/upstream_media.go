@@ -55,23 +55,23 @@ func (um *upstreamMedia) CommandPause() { um.control <- upstreamMedia_CommandPau
 func (um *upstreamMedia) CommandShut()  { um.control <- upstreamMedia_CommandShut }
 
 func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
-	utils.Logger.Trace().Str("action", "start").Str("camera", um.camID).Msg("upstream media")
+	utils.Logger.Trace().Str("action", "start").Str("camera", um.camID).Msg("up media")
 
 	if !um.singletonLock.TryLock() {
-		panic("BUG the upstream media is already running")
+		panic("BUG the up media is already running")
 	}
 	defer um.singletonLock.Unlock()
 
 	// Connect to the internal media bridge fed by the camera
 	socketRtp, err := pull.NewSocket()
 	if err != nil {
-		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("up media")
 		return
 	}
 	// Connect to the internal media bridge fed by the camera
 	socketRtcp, err := pull.NewSocket()
 	if err != nil {
-		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("upstream media")
+		utils.Logger.Warn().Str("action", "north socket").Err(err).Msg("up media")
 		return
 	}
 	defer func() { _ = socketRtcp.Close() }()
@@ -79,7 +79,7 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 	// Try to connect to the internal media bridge fed by the camera, until it either works or get cancelled
 	for ctx.Err() == nil {
 		if err = socketRtp.Dial(makeNorthRtp(um.camID)); err != nil {
-			utils.Logger.Warn().Str("action", "north rtp dial").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "north rtp dial").Err(err).Msg("up media")
 			time.Sleep(200 * time.Millisecond)
 		} else {
 			break
@@ -87,7 +87,7 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 	}
 	for ctx.Err() == nil {
 		if err = socketRtcp.Dial(makeNorthRtcp(um.camID)); err != nil {
-			utils.Logger.Warn().Str("action", "north rtcp dial").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "north rtcp dial").Err(err).Msg("up media")
 			time.Sleep(200 * time.Millisecond)
 		} else {
 			break
@@ -96,21 +96,21 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 	if ctx.Err() != nil {
 		return
 	} else {
-		utils.Logger.Trace().Str("action", "north dial").Msg("upstream media")
+		utils.Logger.Trace().Str("action", "north dial").Msg("up media")
 	}
 
 	// Open a gRPC connection for the upstream
-	client := pb.NewControllerClient(cnx)
+	client := pb.NewDownstreamClient(cnx)
 
 	ctx = metadata.AppendToOutgoingContext(ctx,
 		utils.KeyUser, um.cfg.User,
 		utils.KeyStream, um.camID)
 
-	var ctrl pb.Controller_MediaUploadClient
+	var ctrl pb.Downstream_MediaUploadClient
 	for ctx.Err() == nil {
 		ctrl, err = client.MediaUpload(ctx)
 		if err != nil {
-			utils.Logger.Warn().Str("action", "grpc dial").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "grpc dial").Err(err).Msg("up media")
 			time.Sleep(500 * time.Millisecond)
 		} else {
 			break
@@ -119,38 +119,42 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 	if ctx.Err() != nil {
 		return
 	} else {
-		utils.Logger.Trace().Str("action", "grpc dial").Msg("upstream media")
+		utils.Logger.Trace().Str("action", "grpc dial").Msg("up media")
 	}
 
 	utils.GroupRun(ctx,
-		func(c context.Context) { upstreamPipeline(c, socketRtp, ctrl, pb.MediaFrameType_FrameType_RTP) },
-		func(c context.Context) { upstreamPipeline(c, socketRtcp, ctrl, pb.MediaFrameType_FrameType_RTCP) },
+		func(c context.Context) {
+			upstreamPipeline(c, socketRtp, ctrl, pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTP)
+		},
+		func(c context.Context) {
+			upstreamPipeline(c, socketRtcp, ctrl, pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP)
+		},
 	)
 }
 
-func upstreamPipeline(ctx context.Context, sock protocol.Socket, ctrl pb.Controller_MediaUploadClient, frameType pb.MediaFrameType) {
+func upstreamPipeline(ctx context.Context, sock protocol.Socket, ctrl pb.Downstream_MediaUploadClient, frameType pb.DownstreamMediaFrameType) {
 	proto := "rtp"
-	if frameType == pb.MediaFrameType_FrameType_RTCP {
+	if frameType == pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP {
 		proto = "rtcp"
 	}
 
 	for {
 		if err := ctx.Err(); err != nil {
-			utils.Logger.Warn().Str("action", "interrupted").Err(err).Str("proto", proto).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "interrupted").Err(err).Str("proto", proto).Msg("up media")
 			return
 		}
 		msg, err := sock.Recv()
 		if err != nil {
-			utils.Logger.Warn().Str("action", "consume").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "consume").Err(err).Msg("up media")
 			return
 		}
 
-		frame := &pb.MediaFrame{
+		frame := &pb.DownstreamMediaFrame{
 			Type:    frameType,
 			Payload: msg,
 		}
 		if err := ctrl.Send(frame); err != nil {
-			utils.Logger.Warn().Str("action", "send").Err(err).Msg("upstream media")
+			utils.Logger.Warn().Str("action", "send").Err(err).Msg("up media")
 			return
 		}
 	}

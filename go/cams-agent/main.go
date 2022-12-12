@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
 
 	"github.com/spf13/cobra"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
@@ -24,9 +26,9 @@ func main() {
 		Long:  "LAN agent for OnVif cameras",
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// FIXME(jfs): load an external configuration file or CLI options
 			cfg := AgentConfig{
-				User: "plop",
-
+				User:             "plop",
 				DiscoverPatterns: []string{"!lo", "!docker.*", ".*"},
 				Upstream: UpstreamConfig{
 					Address: "127.0.0.1:6000",
@@ -34,7 +36,9 @@ func main() {
 				},
 			}
 
-			ctx := context.Background()
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
+			defer cancel()
+
 			return runAgent(ctx, cfg)
 		},
 	}

@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"net"
+	"os"
+	"os/signal"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -20,15 +22,16 @@ func main() {
 		Long:  "Hub / Upstream for Cams Agent",
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
+			// FIXME(jfs): load an external configuration file or CLI options
 			cfg := utils.ServerConfig{
 				ListenAddr: "127.0.0.1:6000",
 				PathCrt:    "",
 				PathKey:    "",
 			}
-			// FIXME(jfs): load an external configuration file or CLI options
+
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
+			defer cancel()
+
 			return runHub(ctx, cfg)
 		},
 	}
@@ -64,11 +67,21 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 		return err
 	}
 
-	pb.RegisterRegistrarServer(cnx, hub)
-	pb.RegisterControllerServer(cnx, hub)
-	pb.RegisterViewerServer(cnx, hub)
+	utils.SwarmRun(ctx,
+		func(c context.Context) {
+			<-c.Done()
+			cnx.GracefulStop()
+		},
+		func(c context.Context) {
+			pb.RegisterRegistrarServer(cnx, hub)
+			pb.RegisterDownstreamServer(cnx, hub)
+			pb.RegisterViewerServer(cnx, hub)
+			hub.registrar = NewRegistrarInMem()
+			if err := cnx.Serve(listener); err != nil {
+				utils.Logger.Warn().Err(err).Msg("grpc")
+			}
+		},
+	)
 
-	hub.registrar = NewRegistrarInMem()
-
-	return cnx.Serve(listener)
+	return nil
 }

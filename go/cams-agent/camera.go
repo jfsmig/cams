@@ -125,7 +125,7 @@ func (cam *LanCamera) Run(ctx context.Context) {
 		Password: password,
 	})
 	if err != nil {
-		utils.Logger.Error().Err(err).Str("action", "auth").Msg("camera")
+		utils.Logger.Error().Err(err).Str("action", "auth").Msg("cam")
 		return
 	}
 	transport := gortsplib.TransportUDP
@@ -161,16 +161,16 @@ func (cam *LanCamera) StopStream() { cam.requests <- CamCommandPause }
 
 func (cam *LanCamera) runStream(ctx context.Context) {
 	for ctx.Err() == nil {
-		utils.Logger.Debug().Str("url", cam.endpoint).Str("action", "start").Msg("device")
+		utils.Logger.Debug().Str("url", cam.endpoint).Str("action", "start").Msg("cam")
 		err := cam.runStreamOnce(ctx)
 		if err != nil {
-			utils.Logger.Warn().Str("url", cam.endpoint).Str("action", "done").Err(err).Msg("device")
+			utils.Logger.Warn().Str("url", cam.endpoint).Str("action", "done").Err(err).Msg("cam")
 		} else {
 			// Avoid a crazy loop
 			time.Sleep(5 * time.Second)
 		}
 	}
-	utils.Logger.Info().Str("url", cam.endpoint).Str("action", "done").Msg("device")
+	utils.Logger.Info().Str("url", cam.endpoint).Str("action", "done").Msg("cam")
 }
 
 func (cam *LanCamera) runStreamOnce(ctx context.Context) error {

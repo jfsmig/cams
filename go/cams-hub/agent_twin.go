@@ -21,7 +21,7 @@ const (
 
 type AgentTwin struct {
 	agentID    AgentID
-	downstream pb.Controller_ControlServer
+	downstream pb.Downstream_ControlServer
 
 	// Control commands sent to the agent twin by the system
 	requests chan string
@@ -39,7 +39,7 @@ type agentStream struct {
 	requests chan string
 }
 
-func NewAgentTwin(id AgentID, stream pb.Controller_ControlServer) *AgentTwin {
+func NewAgentTwin(id AgentID, stream pb.Downstream_ControlServer) *AgentTwin {
 	agent := AgentTwin{}
 	agent.agentID = id
 	agent.downstream = stream

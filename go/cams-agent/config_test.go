@@ -15,9 +15,8 @@ var encoded = `{
         {"address": "127.0.0.1", "user":"admin" },
         {"address": "127.0.0.2", "user":"admin" }
     ],
-    "upstreams": [
-        {"address": "127.0.0.1:6000", "timeout": 10}
-    ]}`
+    "upstreams": {"address": "127.0.0.1:6000", "timeout": 10}
+}`
 
 func assertValue[T comparable](t *testing.T, decoded, expected T) {
 	if expected != decoded {
