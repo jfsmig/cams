@@ -15,6 +15,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install --assume-yes --no-install-recommends protobuf-compiler protobuf-compiler-grpc
             sudo apt-get install --assume-yes --no-install-recommends ffmpeg libavcodec-dev libavcodec58 libavdevice-dev libavdevice58 libavfilter-dev libavfilter7 libavformat-dev libavformat58 libavutil-dev libavutil56
+            sudo apt-get install --assume-yes --no-install-recommends nng-utils libnng1 libnng-dev
       - run:
           name: "Install the dependencies (go)"
           command: |
