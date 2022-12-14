@@ -9,7 +9,7 @@ require (
 	github.com/juju/errors v0.0.0-20220331221717-b38fca44723b
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/cobra v1.4.0
-	github.com/use-go/onvif v0.0.1
+	github.com/use-go/onvif v0.0.9
 	go.nanomsg.org/mangos/v3 v3.4.2
 	google.golang.org/grpc v1.46.0
 	google.golang.org/protobuf v1.28.0
@@ -32,6 +32,6 @@ require (
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
 )
 
-replace github.com/use-go/onvif => github.com/jfsmig/onvif v0.0.2-0.20220510221409-d203ed011126
+replace github.com/use-go/onvif => github.com/jfsmig/onvif v0.0.2-0.20221212195031-7375d6c78ab1
 
 //replace github.com/aler9/gortsplib => github.com/jfsmig/gortsplib v0.0.0-20220724100730-2c8889602c59

@@ -33,6 +33,6 @@ type grpcHub struct {
 	// Gathers the known streams
 	registrar Registrar
 
-	// Gather the established connections to agent on the field
-	agent bags.SortedObj[AgentID, *AgentTwin]
+	// Gather the established connections to agents on the field
+	agents bags.SortedObj[AgentID, *AgentTwin]
 }

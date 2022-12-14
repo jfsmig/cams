@@ -19,8 +19,8 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 	}
 	user := md.Get(utils.KeyUser)[0]
 
-	if hub.agent.Has(AgentID(user)) {
-		err := status.Error(codes.AlreadyExists, "user agent already running")
+	if hub.agents.Has(AgentID(user)) {
+		err := status.Error(codes.AlreadyExists, "user agents already running")
 		utils.Logger.Warn().Str("user", user).Str("action", "check").Err(err).Msg("hub ctrl")
 		return err
 	}
@@ -28,8 +28,9 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 	utils.Logger.Trace().Str("user", user).Str("action", "start").Msg("hub ctrl")
 
 	agent := NewAgentTwin(AgentID(user), stream)
+	hub.agents.Add(agent)
 
-	// wait for commands from outside, to propagate to the agent
+	// wait for commands from outside, to propagate to the agents
 	for running := true; running; {
 		select {
 		case <-stream.Context().Done():
@@ -61,7 +62,7 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 	close(agent.requests)
 
 	// Unregister the AgentTwin
-	hub.agent.Remove(AgentID(user))
+	hub.agents.Remove(AgentID(user))
 
 	return nil
 }
@@ -81,9 +82,9 @@ func (hub *grpcHub) Media(stream pb.Downstream_MediaUploadServer) error {
 		Str("user", userId).Str("cam", streamId).
 		Msg("hub media")
 
-	// Ensure the digital twin of the agent exists (it has been created at the provisionning step.
+	// Ensure the digital twin of the agents exists (it has been created at the provisionning step.
 	// and that we create the ownly media upstream for that digital twin.
-	agent, ok := hub.agent.Get(AgentID(userId))
+	agent, ok := hub.agents.Get(AgentID(userId))
 	if !ok {
 		return status.Error(codes.NotFound, "agent unknown")
 	}

@@ -23,7 +23,7 @@ type AgentTwin struct {
 	agentID    AgentID
 	downstream pb.Downstream_ControlServer
 
-	// Control commands sent to the agent twin by the system
+	// Control commands sent to the agents twin by the system
 	requests chan string
 
 	// notifications of terminated media goroutines

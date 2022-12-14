@@ -29,10 +29,25 @@ type AgentConfig struct {
 	DiscoverPatterns []string `json:"discover"`
 	ScanPeriod       int64    `json:"scan_period"`
 	CheckPeriod      int64    `json:"check_period"`
+	RegisterPeriod   int64    `json:"register_period"`
 
 	Interfaces []string       `json:"interfaces"`
 	Cameras    []CameraConfig `json:"cameras"`
 	Upstream   UpstreamConfig `json:"upstreams"`
+}
+
+func DefaultConfig() AgentConfig {
+	return AgentConfig{
+		User:             "plop",
+		DiscoverPatterns: []string{"!lo", "!docker.*", ".*"},
+		ScanPeriod:       30,
+		CheckPeriod:      15,
+		RegisterPeriod:   5,
+		Upstream: UpstreamConfig{
+			Address: "127.0.0.1:6000",
+			Timeout: 30,
+		},
+	}
 }
 
 func (cfg *AgentConfig) LoadFile(path string) error {

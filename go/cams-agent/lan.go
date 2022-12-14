@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"net"
 	"net/url"
 	"regexp"
 	"sync"
@@ -112,7 +111,7 @@ func (lan *lanAgent) UpdateStreamExpectation(camId string, cmd StreamExpectation
 	switch cmd {
 	case UpstreamAgent_ExpectPlay:
 		if cam.State == CamAgentOff {
-			lan.camsSwarm.Run(cam.Run)
+			lan.camsSwarm.Run(runCam(cam))
 		}
 		cam.PlayStream()
 	case UpstreamAgent_ExpectPause:
@@ -202,7 +201,7 @@ func (lan *lanAgent) RunTimers(ctx context.Context) {
 // discoverNics does the discovery from the output of a given function.
 // It helps to test the logic.
 func (lan *lanAgent) discoverNics() error {
-	itfs, err := discoverSystemNics()
+	itfs, err := utils.DiscoverSystemNics()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -249,11 +248,14 @@ func (lan *lanAgent) registerInterface(itf string) {
 }
 
 func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
+	utils.Logger.Trace().
+		Interface("info", discovered.GetDeviceInfo()).
+		Interface("services", discovered.GetServices()).
+		Msg("device")
+
 	k := discovered.GetDeviceInfo().SerialNumber
 
 	u := discovered.GetEndpoint("device")
-	utils.Logger.Debug().Str("url", u).Uint32("gen", generation).Str("action", "adding").Msg("device")
-
 	parsedUrl, err := url.Parse(u)
 	if err != nil {
 		return errors.Trace(err)
@@ -266,6 +268,12 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 	devInPlace, ok := lan.devices.Get(k)
 	if ok {
 		if generation > devInPlace.generation {
+			utils.Logger.Debug().
+				Str("key", devInPlace.PK()).
+				Str("endpoint", u).
+				Uint32("gen", generation).
+				Str("action", "refresh").
+				Msg("device")
 			devInPlace.generation = generation
 		}
 		return nil
@@ -279,12 +287,16 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 		utils.Logger.Info().
 			Str("key", dev.PK()).
 			Str("endpoint", u).
+			Uint32("gen", generation).
 			Str("action", "add").
 			Str("user", dev.user).
 			Str("password", dev.password).
 			Msg("device")
 		lan.Notify(dev.PK(), CameraState_Online)
 	}
+
+	lan.camsSwarm.Run(runCam(dev))
+
 	return err
 }
 
@@ -351,15 +363,3 @@ func (lan *lanAgent) triggerRescanAsync(ctx context.Context) {
 }
 
 func (lan *lanAgent) PK() string { return "lan" }
-
-func discoverSystemNics() ([]string, error) {
-	var out []string
-	itfs, err := net.Interfaces()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	for _, itf := range itfs {
-		out = append(out, itf.Name)
-	}
-	return out, nil
-}

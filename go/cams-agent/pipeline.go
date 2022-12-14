@@ -1,3 +1,5 @@
+// Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
+
 package main
 
 import (

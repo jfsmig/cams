@@ -27,15 +27,7 @@ func main() {
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// FIXME(jfs): load an external configuration file or CLI options
-			cfg := AgentConfig{
-				User:             "plop",
-				DiscoverPatterns: []string{"!lo", "!docker.*", ".*"},
-				Upstream: UpstreamConfig{
-					Address: "127.0.0.1:6000",
-					Timeout: 30,
-				},
-			}
-
+			cfg := DefaultConfig()
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
 			defer cancel()
 

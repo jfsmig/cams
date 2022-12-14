@@ -10,6 +10,7 @@ var encoded = `{
     "discover": ["eth*", "enp*", "!wl*", "!lo"],
     "scan_period": 5,
     "check_period": 5,
+    "register_period": 5,
     "interfaces": [ "eno0" ],
     "cameras": [
         {"address": "127.0.0.1", "user":"admin" },
@@ -51,6 +52,7 @@ func TestConfig_FromEmpty(t *testing.T) {
 		DiscoverPatterns: []string{"eth*", "enp*", "!wl*", "!lo"},
 		ScanPeriod:       5,
 		CheckPeriod:      5,
+		RegisterPeriod:   5,
 		Interfaces:       []string{"eno0"},
 		Cameras: []CameraConfig{
 			{Address: "127.0.0.1", User: "admin"},
@@ -67,6 +69,7 @@ func TestConfig_Override(t *testing.T) {
 		DiscoverPatterns: []string{"x", "y"},
 		ScanPeriod:       17,
 		CheckPeriod:      18,
+		RegisterPeriod:   19,
 		Interfaces:       []string{"xxxx"},
 		Cameras: []CameraConfig{
 			{Address: "127.0.0.1", User: "x"},
@@ -83,6 +86,7 @@ func TestConfig_Override(t *testing.T) {
 		DiscoverPatterns: []string{"eth*", "enp*", "!wl*", "!lo"},
 		ScanPeriod:       5,
 		CheckPeriod:      5,
+		RegisterPeriod:   5,
 		Interfaces:       []string{"eno0"},
 		Cameras: []CameraConfig{
 			{Address: "127.0.0.1", User: "admin"},

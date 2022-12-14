@@ -11,29 +11,26 @@ import (
 func (hub *grpcHub) Play(ctx context.Context, req *pb.PlayRequest) (*pb.None, error) {
 	utils.Logger.Info().Str("action", "play").Msg("view")
 
-	return &pb.None{}, hub.viewerAction(req.Id.User, req.Id.Stream, func(a *AgentTwin, s string) error {
-		return a.Play(s)
+	return &pb.None{}, hub.viewerStreamAction(req.Id.User, func(a *AgentTwin) error {
+		return a.Play(req.Id.Stream)
 	})
 }
 
 func (hub *grpcHub) Pause(ctx context.Context, req *pb.PauseRequest) (*pb.None, error) {
 	utils.Logger.Info().Str("action", "pause").Msg("view")
 
-	return &pb.None{}, hub.viewerAction(req.Id.User, req.Id.Stream, func(a *AgentTwin, s string) error {
-		return a.Stop(s)
+	return &pb.None{}, hub.viewerStreamAction(req.Id.User, func(a *AgentTwin) error {
+		return a.Stop(req.Id.Stream)
 	})
 }
 
-func (hub *grpcHub) viewerAction(agentId, streamId string, action func(*AgentTwin, string) error) error {
-	if !hub.agent.Has(AgentID(agentId)) {
-		return status.Error(codes.NotFound, "agent not found")
+func (hub *grpcHub) viewerStreamAction(agentId string, action func(*AgentTwin) error) error {
+	if !hub.agents.Has(AgentID(agentId)) {
+		return status.Error(codes.NotFound, "agents not found")
 	}
-	agent, _ := hub.agent.Get(AgentID(agentId))
-	if !agent.medias.Has(StreamID(streamId)) {
-		return status.Error(codes.NotFound, "stream not found")
-	}
+	agent, _ := hub.agents.Get(AgentID(agentId))
 
-	if err := action(agent, streamId); err != nil {
+	if err := action(agent); err != nil {
 		return err
 	} else {
 		return nil

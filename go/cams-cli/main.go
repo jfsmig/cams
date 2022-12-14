@@ -3,9 +3,12 @@
 package main
 
 import (
+	"context"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/juju/errors"
 	"github.com/spf13/cobra"
+	"os"
+	"os/signal"
 )
 
 func main() {
@@ -25,11 +28,25 @@ func main() {
 		Long:  "Contact the Cams Hub and download a stream given its User/Stream ID",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return play(args[0], args[1])
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
+			defer cancel()
+			return play(ctx, "127.0.0.1:6000", args[0], args[1])
 		},
 	}
 
-	cmd.AddCommand(play)
+	discover := &cobra.Command{
+		Use:   "discover",
+		Short: "Discover the local cameras",
+		Long:  "Discover the local caneras the way the Cams Agent does",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
+			defer cancel()
+			return discover(ctx)
+		},
+	}
+
+	cmd.AddCommand(play, discover)
 
 	if err := cmd.Execute(); err != nil {
 		utils.Logger.Fatal().Err(err).Msg("Aborting")

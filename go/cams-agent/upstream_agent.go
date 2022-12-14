@@ -61,9 +61,11 @@ func NewUpstreamAgent(cfg AgentConfig) *upstreamAgent {
 	return &upstreamAgent{
 		cfg:           cfg,
 		lan:           nil,
+		control:       make(chan string),
 		singletonLock: sync.Mutex{},
 		observers:     make([]CommandObserver, 0),
-		control:       make(chan string),
+		medias:        make([]UpstreamMedia, 0),
+		expectations:  make(map[string]bool),
 	}
 }
 
@@ -109,10 +111,17 @@ func (us *upstreamAgent) NotifyCameraExpectation(camID string, cmd StreamExpecta
 	}
 }
 
+func (us *upstreamAgent) getRegisterPeriod() time.Duration {
+	if us.cfg.RegisterPeriod > 0 {
+		return time.Duration(us.cfg.RegisterPeriod) * time.Second
+	}
+	return 30 * time.Second
+}
+
 func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 	utils.Logger.Trace().Str("action", "start").Msg("up")
 
-	registrationTicker := time.Tick(5 * time.Second)
+	registrationNext := time.After(us.getRegisterPeriod())
 	client := pb.NewRegistrarClient(cnx)
 
 	camSwarm := utils.NewSwarm(ctx)
@@ -124,7 +133,8 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 		case <-ctx.Done():
 			return
 
-		case <-registrationTicker:
+		case <-registrationNext:
+			registrationNext = time.After(us.getRegisterPeriod())
 			ctx = metadata.AppendToOutgoingContext(ctx,
 				utils.KeyUser, us.cfg.User)
 			for _, cam := range us.lan.Cameras() {
