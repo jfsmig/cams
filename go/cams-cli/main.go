@@ -46,7 +46,19 @@ func main() {
 		},
 	}
 
-	cmd.AddCommand(play, discover)
+	details := &cobra.Command{
+		Use:   "detail",
+		Short: "Dump the configuration of the given camera",
+		Long:  "Dump the configuration of the given camera, playing all the possible OnVif calls to explicitly check which are supported",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
+			defer cancel()
+			return details(ctx, args[0])
+		},
+	}
+
+	cmd.AddCommand(play, discover, details)
 
 	if err := cmd.Execute(); err != nil {
 		utils.Logger.Fatal().Err(err).Msg("Aborting")

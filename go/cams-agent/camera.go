@@ -53,7 +53,8 @@ const (
 
 // We assume only one stream per camera.
 type LanCamera struct {
-	ID string
+	ID   string
+	Info goonvif.DeviceInfo
 
 	singletonLock sync.Mutex
 	State         CamAgentState
@@ -72,7 +73,7 @@ type LanCamera struct {
 	group utils.Swarm
 }
 
-func NewCamera(id, endpoint string) (*LanCamera, error) {
+func NewCamera(endpoint string) (*LanCamera, error) {
 	authenticatedDevice, err := goonvif.NewDevice(goonvif.DeviceParams{
 		Xaddr:    endpoint,
 		Username: user,
@@ -84,7 +85,7 @@ func NewCamera(id, endpoint string) (*LanCamera, error) {
 	transport := gortsplib.TransportUDP
 
 	return &LanCamera{
-		ID:          id,
+		ID:          "",
 		endpoint:    endpoint,
 		user:        user,
 		password:    password,
@@ -100,6 +101,19 @@ func NewCamera(id, endpoint string) (*LanCamera, error) {
 		},
 		requests: make(chan CamCommand, 1),
 	}, nil
+}
+
+func (cam *LanCamera) LoadInfo(ctx context.Context) error {
+	reply, err := sdev.Call_GetDeviceInformation(ctx, cam.onvifClient, device.GetDeviceInformation{})
+	if err != nil {
+		return err
+	}
+	cam.Info.SerialNumber = reply.SerialNumber
+	cam.Info.HardwareId = reply.HardwareId
+	cam.Info.FirmwareVersion = reply.FirmwareVersion
+	cam.Info.Model = reply.Model
+	cam.Info.Manufacturer = reply.Manufacturer
+	return nil
 }
 
 func runCam(cam *LanCamera) utils.SwarmFunc {

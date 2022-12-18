@@ -4,7 +4,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
+	"os"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -248,24 +250,29 @@ func (lan *lanAgent) registerInterface(itf string) {
 }
 
 func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
-	utils.Logger.Trace().
-		Interface("info", discovered.GetDeviceInfo()).
-		Interface("services", discovered.GetServices()).
-		Msg("device")
-
-	k := discovered.GetDeviceInfo().SerialNumber
-
 	u := discovered.GetEndpoint("device")
 	parsedUrl, err := url.Parse(u)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
+	// If not, the camera is new on the LAN
+	dev, err := NewCamera(parsedUrl.Host)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if err = dev.LoadInfo(ctx); err != nil {
+		return errors.Trace(err)
+	} else {
+		json.NewEncoder(os.Stdout).Encode(dev.Info)
+	}
+
 	lan.dataLock.Lock()
 	defer lan.dataLock.Unlock()
 
 	// If the camera is already know, let's just update its generation counter
-	devInPlace, ok := lan.devices.Get(k)
+	devInPlace, ok := lan.devices.Get(dev.PK())
 	if ok {
 		if generation > devInPlace.generation {
 			utils.Logger.Debug().
@@ -275,13 +282,8 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 				Str("action", "refresh").
 				Msg("device")
 			devInPlace.generation = generation
-		}
-		return nil
-	}
-
-	// If not, the camera is new on the LAN
-	dev, err := NewCamera(k, parsedUrl.Host)
-	if err == nil {
+		} // else ... stale discovery (why not?)
+	} else {
 		dev.generation = generation
 		lan.devices.Add(dev)
 		utils.Logger.Info().
@@ -292,12 +294,11 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 			Str("user", dev.user).
 			Str("password", dev.password).
 			Msg("device")
+
+		lan.camsSwarm.Run(runCam(dev))
 		lan.Notify(dev.PK(), CameraState_Online)
 	}
-
-	lan.camsSwarm.Run(runCam(dev))
-
-	return err
+	return nil
 }
 
 func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discovered []goonvif.Device) {

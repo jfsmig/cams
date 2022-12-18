@@ -4,8 +4,9 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/url"
+	"os"
 
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
@@ -16,11 +17,19 @@ import (
 )
 
 func discover(ctx context.Context) error {
+	type Output struct {
+		device.GetDeviceInformationResponse
+		Error     error
+		Interface string
+		Endpoint  string
+	}
+
 	interfaces, err := utils.DiscoverSystemNics()
 	if err != nil {
 		return errors.Annotate(err, "lan discovery")
 	}
 
+	encoder := json.NewEncoder(os.Stdout)
 	for _, itf := range interfaces {
 		devices, err := goonvif.GetAvailableDevicesAtSpecificEthernetInterface(itf)
 		if err != nil {
@@ -39,8 +48,13 @@ func discover(ctx context.Context) error {
 				} else {
 					dev = *authDev
 				}
+
 				reply, err := sdk.Call_GetDeviceInformation(ctx, &dev, device.GetDeviceInformation{})
-				fmt.Println(itf, dev.GetDeviceInfo(), dev.GetServices(), reply, err)
+				out := Output{GetDeviceInformationResponse: reply}
+				out.Error = err
+				out.Interface = itf
+				out.Endpoint = parsedUrl.Host
+				encoder.Encode(out)
 			}
 		}
 	}
