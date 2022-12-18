@@ -5,17 +5,25 @@ package main
 import (
 	"context"
 	"encoding/json"
-	smedia "github.com/use-go/onvif/sdk/media"
+	sptz "github.com/use-go/onvif/sdk/ptz"
 	"os"
 
+	"github.com/jfsmig/cams/go/utils"
 	"github.com/juju/errors"
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/device"
 	"github.com/use-go/onvif/media"
+	"github.com/use-go/onvif/ptz"
 	sdev "github.com/use-go/onvif/sdk/device"
-
-	"github.com/jfsmig/cams/go/utils"
+	smedia "github.com/use-go/onvif/sdk/media"
 )
+
+type OnvifOutput struct {
+	Endpoint string
+	Device   DeviceOutput
+	Media    MediaOutput
+	Ptz      PtzOutput
+}
 
 type DeviceOutput struct {
 	AccessPolicy             *device.GetAccessPolicyResponse
@@ -108,10 +116,19 @@ type MediaOutput struct {
 	VideoSources                            *media.GetVideoSourcesResponse
 }
 
-type OnvifOutput struct {
-	Endpoint string
-	Device   DeviceOutput
-	Media    MediaOutput
+type PtzOutput struct {
+	ServiceCapabilities      *ptz.GetServiceCapabilitiesResponse
+	Nodes                    *ptz.GetNodesResponse
+	Node                     *ptz.GetNodeResponse
+	Configuration            *ptz.GetConfigurationResponse
+	Configurations           *ptz.GetConfigurationsResponse
+	ConfigurationOptions     *ptz.GetConfigurationOptionsResponse
+	Presets                  *ptz.GetPresetsResponse
+	Status                   *ptz.GetStatusResponse
+	PresetTours              *ptz.GetPresetToursResponse
+	PresetTour               *ptz.GetPresetTourResponse
+	PresetTourOptions        *ptz.GetPresetTourOptionsResponse
+	CompatibleConfigurations *ptz.GetCompatibleConfigurationsResponse
 }
 
 func detailMedia(ctx context.Context, dev *goonvif.Device) MediaOutput {
@@ -551,6 +568,71 @@ func detailDevice(ctx context.Context, dev *goonvif.Device) DeviceOutput {
 	return out
 }
 
+func detailPTZ(ctx context.Context, dev *goonvif.Device) PtzOutput {
+	var out PtzOutput
+	if p, err := sptz.Call_GetServiceCapabilities(ctx, dev, ptz.GetServiceCapabilities{}); err == nil {
+		out.ServiceCapabilities = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "ServiceCapabilities").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetNodes(ctx, dev, ptz.GetNodes{}); err == nil {
+		out.Nodes = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "Nodes").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetNode(ctx, dev, ptz.GetNode{}); err == nil {
+		out.Node = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "Node").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetConfiguration(ctx, dev, ptz.GetConfiguration{}); err == nil {
+		out.Configuration = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "Configuration").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetConfigurations(ctx, dev, ptz.GetConfigurations{}); err == nil {
+		out.Configurations = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "Configurations").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetConfigurationOptions(ctx, dev, ptz.GetConfigurationOptions{}); err == nil {
+		out.ConfigurationOptions = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "ConfigurationOptions").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetPresets(ctx, dev, ptz.GetPresets{}); err == nil {
+		out.Presets = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "Presets").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetStatus(ctx, dev, ptz.GetStatus{}); err == nil {
+		out.Status = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "Status").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetPresetTours(ctx, dev, ptz.GetPresetTours{}); err == nil {
+		out.PresetTours = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "PresetTours").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetPresetTour(ctx, dev, ptz.GetPresetTour{}); err == nil {
+		out.PresetTour = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "PresetTour").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetPresetTourOptions(ctx, dev, ptz.GetPresetTourOptions{}); err == nil {
+		out.PresetTourOptions = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "PresetTourOptions").Msg("ptz")
+	}
+	if p, err := sptz.Call_GetCompatibleConfigurations(ctx, dev, ptz.GetCompatibleConfigurations{}); err == nil {
+		out.CompatibleConfigurations = &p
+	} else {
+		utils.Logger.Trace().Err(err).Str("rpc", "CompatibleConfigurations").Msg("ptz")
+	}
+	return out
+}
+
 func details(ctx context.Context, endpoint string) error {
 
 	dev, err := goonvif.NewDevice(goonvif.DeviceParams{
@@ -566,6 +648,7 @@ func details(ctx context.Context, endpoint string) error {
 	out.Endpoint = endpoint
 	out.Device = detailDevice(ctx, dev)
 	out.Media = detailMedia(ctx, dev)
+	out.Ptz = detailPTZ(ctx, dev)
 
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
