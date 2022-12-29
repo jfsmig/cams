@@ -8,6 +8,9 @@ jobs:
       - image: cimg/go:1.19
     steps:
       - checkout
+      - run: cd go && go install ./...
+      - run: cd go && go vet ./...
+      - run: cd go && go test ./...
       - run:
           name: "Install the system dependencies"
           command: |
@@ -30,18 +33,7 @@ jobs:
             set -euxo pipefail
             cd go
             go generate ./...
-      - run:
-          name: "Build (go)"
-          command: |
-            set -euxo pipefail
-            cd go
-            go install ./...
-      - run:
-          name: "Unit tests"
-          command: |
-            set -euxo pipefail
-            cd go
-            go test ./...
+            git diff --quiet --exit-code
       - run:
           name: "Build (c++)"
           command: |

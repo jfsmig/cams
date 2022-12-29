@@ -4,20 +4,14 @@ package main
 
 import (
 	"context"
-	"github.com/use-go/onvif/device"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/url"
+	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
-	goonvif "github.com/use-go/onvif"
-	"github.com/use-go/onvif/media"
-	sdev "github.com/use-go/onvif/sdk/device"
-	smedia "github.com/use-go/onvif/sdk/media"
-	"github.com/use-go/onvif/xsd/onvif"
 	"go.nanomsg.org/mangos/v3/protocol/push"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
 
@@ -53,19 +47,12 @@ const (
 
 // We assume only one stream per camera.
 type LanCamera struct {
-	ID   string
-	Info goonvif.DeviceInfo
-
+	ID            string
+	generation    uint32
 	singletonLock sync.Mutex
 	State         CamAgentState
 
-	endpoint string
-	user     string
-	password string
-
-	generation uint32
-
-	onvifClient *goonvif.Device
+	onvifClient sdk.Appliance
 	rtspClient  gortsplib.Client
 
 	requests chan CamCommand
@@ -73,24 +60,12 @@ type LanCamera struct {
 	group utils.Swarm
 }
 
-func NewCamera(endpoint string) (*LanCamera, error) {
-	authenticatedDevice, err := goonvif.NewDevice(goonvif.DeviceParams{
-		Xaddr:    endpoint,
-		Username: user,
-		Password: password,
-	})
-	if err != nil {
-		return nil, errors.Annotate(err, "authentication failed")
-	}
+func NewCamera(appliance sdk.Appliance) (*LanCamera, error) {
 	transport := gortsplib.TransportUDP
-
 	return &LanCamera{
-		ID:          "",
-		endpoint:    endpoint,
-		user:        user,
-		password:    password,
+		ID:          appliance.GetUUID(),
 		generation:  0,
-		onvifClient: authenticatedDevice,
+		onvifClient: appliance,
 		rtspClient: gortsplib.Client{
 			ReadTimeout:           5 * time.Second,
 			WriteTimeout:          5 * time.Second,
@@ -101,19 +76,6 @@ func NewCamera(endpoint string) (*LanCamera, error) {
 		},
 		requests: make(chan CamCommand, 1),
 	}, nil
-}
-
-func (cam *LanCamera) LoadInfo(ctx context.Context) error {
-	reply, err := sdev.Call_GetDeviceInformation(ctx, cam.onvifClient, device.GetDeviceInformation{})
-	if err != nil {
-		return err
-	}
-	cam.Info.SerialNumber = reply.SerialNumber
-	cam.Info.HardwareId = reply.HardwareId
-	cam.Info.FirmwareVersion = reply.FirmwareVersion
-	cam.Info.Model = reply.Model
-	cam.Info.Manufacturer = reply.Manufacturer
-	return nil
 }
 
 func runCam(cam *LanCamera) utils.SwarmFunc {
@@ -136,91 +98,10 @@ func (cam *LanCamera) Run(ctx context.Context) {
 		cam.State = CamAgentOff
 		close(cam.requests)
 		cam.requests = nil
-		cam.onvifClient = nil
 	}()
 
-	authenticatedDevice, err := goonvif.NewDevice(goonvif.DeviceParams{
-		Xaddr:    cam.endpoint,
-		Username: user,
-		Password: password,
-	})
-	if err != nil {
-		utils.Logger.Error().Err(err).Str("action", "auth").Msg("cam")
-		return
-	}
 	transport := gortsplib.TransportUDP
-	cam.onvifClient = authenticatedDevice
 	cam.rtspClient.Transport = &transport
-
-	if reply, err := sdev.Call_GetSystemUris(ctx, cam.onvifClient, device.GetSystemUris{}); err == nil {
-		utils.Logger.Info().Interface("uris", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("uris", nil).Msg("cam")
-	}
-	if reply, err := sdev.Call_GetEndpointReference(ctx, cam.onvifClient, device.GetEndpointReference{}); err == nil {
-		utils.Logger.Info().Interface("ep_ref", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("ep_ref", nil).Msg("cam")
-	}
-	if reply, err := sdev.Call_GetEndpointReference(ctx, cam.onvifClient, device.GetEndpointReference{}); err == nil {
-		utils.Logger.Info().Interface("ep_ref", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("ep_ref", nil).Msg("cam")
-	}
-	if reply, err := sdev.Call_GetServices(ctx, cam.onvifClient, device.GetServices{}); err == nil {
-		utils.Logger.Info().Interface("srv", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("srv", nil).Msg("cam")
-	}
-	if reply, err := sdev.Call_GetServiceCapabilities(ctx, cam.onvifClient, device.GetServiceCapabilities{}); err == nil {
-		utils.Logger.Info().Interface("capabilities", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("capabilities", nil).Msg("cam")
-	}
-
-	if reply, err := smedia.Call_GetVideoSources(ctx, cam.onvifClient, media.GetVideoSources{}); err == nil {
-		utils.Logger.Info().Interface("video_sources", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("video_source", nil).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetVideoSourceConfigurations(ctx, cam.onvifClient, media.GetVideoSourceConfigurations{}); err == nil {
-		utils.Logger.Info().Interface("video_source_config", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("video_source_config", nil).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetVideoSourceModes(ctx, cam.onvifClient, media.GetVideoSourceModes{}); err == nil {
-		utils.Logger.Info().Interface("video_source_modes", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("video_source_modes", nil).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetVideoAnalyticsConfiguration(ctx, cam.onvifClient, media.GetVideoAnalyticsConfiguration{}); err == nil {
-		utils.Logger.Info().Interface("video_analytics_config", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("video_analytics_config", nil).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetVideoEncoderConfiguration(ctx, cam.onvifClient, media.GetVideoEncoderConfiguration{}); err == nil {
-		utils.Logger.Info().Interface("video_encoder_config", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("video_encoder_config", nil).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetVideoEncoderConfigurations(ctx, cam.onvifClient, media.GetVideoEncoderConfigurations{}); err == nil {
-		utils.Logger.Info().Interface("video_encoder_configs", reply).Msg("cam")
-	} else {
-		utils.Logger.Info().Err(err).Interface("video_encoder_configs", nil).Msg("cam")
-	}
-
-	if reply, err := smedia.Call_GetAudioSources(ctx, cam.onvifClient, media.GetAudioSources{}); err == nil {
-		utils.Logger.Info().Interface("audio", reply).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetAudioDecoderConfigurations(ctx, cam.onvifClient, media.GetAudioDecoderConfigurations{}); err == nil {
-		utils.Logger.Info().Interface("audio_decoder_config", reply).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetAudioSourceConfigurations(ctx, cam.onvifClient, media.GetAudioSourceConfigurations{}); err == nil {
-		utils.Logger.Info().Interface("audio_source_config", reply).Msg("cam")
-	}
-	if reply, err := smedia.Call_GetMetadataConfigurations(ctx, cam.onvifClient, media.GetMetadataConfigurations{}); err == nil {
-		utils.Logger.Info().Interface("metadata_config", reply).Msg("cam")
-	}
 
 	for {
 		select {
@@ -251,16 +132,16 @@ func (cam *LanCamera) StopStream() { cam.requests <- CamCommandPause }
 
 func (cam *LanCamera) runStream(ctx context.Context) {
 	for ctx.Err() == nil {
-		utils.Logger.Debug().Str("url", cam.endpoint).Str("action", "start").Msg("cam")
+		utils.Logger.Debug().Str("url", cam.ID).Str("action", "start").Msg("cam")
 		err := cam.runStreamOnce(ctx)
 		if err != nil {
-			utils.Logger.Warn().Str("url", cam.endpoint).Str("action", "done").Err(err).Msg("cam")
+			utils.Logger.Warn().Str("url", cam.ID).Str("action", "done").Err(err).Msg("cam")
 		} else {
 			// Avoid a crazy loop
 			time.Sleep(5 * time.Second)
 		}
 	}
-	utils.Logger.Info().Str("url", cam.endpoint).Str("action", "done").Msg("cam")
+	utils.Logger.Info().Str("url", cam.ID).Str("action", "done").Msg("cam")
 }
 
 func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
@@ -348,26 +229,8 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 }
 
 func (cam *LanCamera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
-	request := media.GetStreamUri{
-		StreamSetup: onvif.StreamSetup{
-			Stream: onvif.StreamType("000"),
-			Transport: onvif.Transport{
-				Protocol: onvif.TransportProtocol("RTSP"),
-				Tunnel:   nil,
-			},
-		},
-		ProfileToken: onvif.ReferenceToken("000"),
-	}
-
-	mediaUriReply, err := smedia.Call_GetStreamUri(ctx, cam.onvifClient, request)
-	if err != nil {
-		return nil, errors.Annotate(err, "rpc")
-	}
-
-	sourceUrlRaw := strings.Replace(string(mediaUriReply.MediaUri.Uri),
-		"rtsp://", "rtsp://"+cam.user+":"+cam.password+"@", 1)
-
-	sourceUrl, err := url.Parse(sourceUrlRaw)
+	streamURI := cam.onvifClient.FetchStreamURI(ctx)
+	sourceUrl, err := url.Parse(streamURI)
 	if err != nil {
 		return nil, errors.Annotate(err, "parse")
 	}

@@ -5,7 +5,8 @@ package main
 import (
 	"context"
 
-	goonvif "github.com/use-go/onvif"
+	"github.com/jfsmig/onvif/sdk"
+	wsdiscovery "github.com/jfsmig/onvif/ws-discovery"
 
 	"github.com/jfsmig/cams/go/utils"
 )
@@ -24,25 +25,45 @@ func NewNIC(name string) *Nic {
 
 func (ls *Nic) PK() string { return ls.ItfName }
 
-type RegistrationFunc func(ctx context.Context, gen uint32, discovered []goonvif.Device)
+type RegistrationFunc func(ctx context.Context, gen uint32, discovered []sdk.Appliance)
 
 func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 	utils.Logger.Debug().Str("itf", ls.ItfName).Str("action", "start").Msg("nic")
 	for {
 		select {
+
 		case <-ctx.Done():
 			utils.Logger.Info().Str("itf", ls.ItfName).Str("action", "stop").Msg("nic")
 			close(ls.trigger)
 			return
+
 		case generation := <-ls.trigger:
-			utils.Logger.Trace().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
-			devices, err := goonvif.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
-			if err == nil {
-				utils.Logger.Trace().Str("action", "rescan").Int("devices", len(devices)).Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
-				register(ctx, generation, devices)
-			} else {
+			deviceClients, err := wsdiscovery.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
+			if err != nil {
 				utils.Logger.Warn().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Err(err).Msg("nic")
+				continue
 			}
+
+			utils.Logger.Trace().Str("action", "rescan").Int("devices", len(deviceClients)).Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
+			register(ctx, generation, func() (out []sdk.Appliance) {
+				for i, _ := range deviceClients {
+					client := &deviceClients[i]
+					client.SetAuth(user, password)
+					appliance, err := sdk.WrapClient(client)
+					if err == nil {
+						out = append(out, appliance)
+					} else {
+						utils.Logger.Debug().
+							Str("action", "rescan-avoid").
+							Str("itf", ls.ItfName).
+							Str("key", appliance.GetUUID()).
+							Str("endpoint", appliance.GetDeviceEndpoint()).
+							Uint32("gen", generation).
+							Msg("nic")
+					}
+				}
+				return out
+			}())
 		}
 	}
 }

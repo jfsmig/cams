@@ -4,17 +4,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"net/url"
-	"os"
 	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/jfsmig/go-bags"
+	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
-	goonvif "github.com/use-go/onvif"
 
 	"github.com/jfsmig/cams/go/utils"
 )
@@ -151,7 +148,7 @@ func (lan *lanAgent) Run(ctx context.Context) {
 	}
 
 	// Spawn one goroutine per registered interface, for concurrent discoveries
-	fn := func(ctx0 context.Context, gen uint32, devs []goonvif.Device) {
+	fn := func(ctx0 context.Context, gen uint32, devs []sdk.Appliance) {
 		lan.learnAllCamerasSync(ctx0, gen, devs)
 	}
 	for _, itf := range lan.interfaces {
@@ -249,23 +246,10 @@ func (lan *lanAgent) registerInterface(itf string) {
 	lan.interfaces.Add(NewNIC(itf))
 }
 
-func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered goonvif.Device) error {
-	u := discovered.GetEndpoint("device")
-	parsedUrl, err := url.Parse(u)
+func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered sdk.Appliance) error {
+	dev, err := NewCamera(discovered)
 	if err != nil {
 		return errors.Trace(err)
-	}
-
-	// If not, the camera is new on the LAN
-	dev, err := NewCamera(parsedUrl.Host)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if err = dev.LoadInfo(ctx); err != nil {
-		return errors.Trace(err)
-	} else {
-		json.NewEncoder(os.Stdout).Encode(dev.Info)
 	}
 
 	lan.dataLock.Lock()
@@ -277,7 +261,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 		if generation > devInPlace.generation {
 			utils.Logger.Debug().
 				Str("key", devInPlace.PK()).
-				Str("endpoint", u).
+				Str("endpoint", discovered.GetEndpoint("device")).
 				Uint32("gen", generation).
 				Str("action", "refresh").
 				Msg("device")
@@ -288,11 +272,9 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 		lan.devices.Add(dev)
 		utils.Logger.Info().
 			Str("key", dev.PK()).
-			Str("endpoint", u).
+			Str("endpoint", discovered.GetEndpoint("device")).
 			Uint32("gen", generation).
 			Str("action", "add").
-			Str("user", dev.user).
-			Str("password", dev.password).
 			Msg("device")
 
 		lan.camsSwarm.Run(runCam(dev))
@@ -301,7 +283,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 	return nil
 }
 
-func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discovered []goonvif.Device) {
+func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discovered []sdk.Appliance) {
 	// Update the devices that match the
 	for _, dev := range discovered {
 		if err := lan.learnSingleCameraSync(ctx, gen, dev); err != nil {

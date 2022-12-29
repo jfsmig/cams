@@ -34,31 +34,7 @@ func main() {
 		},
 	}
 
-	discover := &cobra.Command{
-		Use:   "discover",
-		Short: "Discover the local cameras",
-		Long:  "Discover the local caneras the way the Cams Agent does",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
-			defer cancel()
-			return discover(ctx)
-		},
-	}
-
-	details := &cobra.Command{
-		Use:   "detail",
-		Short: "Dump the configuration of the given camera",
-		Long:  "Dump the configuration of the given camera, playing all the possible OnVif calls to explicitly check which are supported",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
-			defer cancel()
-			return details(ctx, args[0])
-		},
-	}
-
-	cmd.AddCommand(play, discover, details)
+	cmd.AddCommand(play)
 
 	if err := cmd.Execute(); err != nil {
 		utils.Logger.Fatal().Err(err).Msg("Aborting")
