@@ -40,8 +40,8 @@ func DefaultConfig() AgentConfig {
 	return AgentConfig{
 		User:             "plop",
 		DiscoverPatterns: []string{"!lo", "!docker.*", ".*"},
-		ScanPeriod:       30,
-		CheckPeriod:      15,
+		ScanPeriod:       17,
+		CheckPeriod:      60,
 		RegisterPeriod:   5,
 		Upstream: UpstreamConfig{
 			Address: "127.0.0.1:6000",

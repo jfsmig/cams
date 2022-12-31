@@ -60,7 +60,7 @@ type LanCamera struct {
 	group utils.Swarm
 }
 
-func NewCamera(appliance sdk.Appliance) (*LanCamera, error) {
+func NewCamera(appliance sdk.Appliance) *LanCamera {
 	transport := gortsplib.TransportUDP
 	return &LanCamera{
 		ID:          appliance.GetUUID(),
@@ -75,7 +75,7 @@ func NewCamera(appliance sdk.Appliance) (*LanCamera, error) {
 			InitialUDPReadTimeout: 3 * time.Second,
 		},
 		requests: make(chan CamCommand, 1),
-	}, nil
+	}
 }
 
 func runCam(cam *LanCamera) utils.SwarmFunc {

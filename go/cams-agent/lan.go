@@ -4,13 +4,15 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/onvif/networking"
+	"github.com/jfsmig/onvif/sdk"
+	"net/http"
 	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/jfsmig/go-bags"
-	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
 
 	"github.com/jfsmig/cams/go/utils"
@@ -19,6 +21,8 @@ import (
 type lanAgent struct {
 	ScanPeriod  time.Duration
 	CheckPeriod time.Duration
+
+	httpClient http.Client
 
 	// Last generation number to have been used/
 	generation uint32
@@ -58,6 +62,8 @@ func NewLanAgent(cfg AgentConfig) *lanAgent {
 	lan := &lanAgent{
 		ScanPeriod:  1 * time.Minute,
 		CheckPeriod: 30 * time.Second,
+
+		httpClient: http.Client{},
 
 		devices:    make([]*LanCamera, 0),
 		interfaces: make([]*Nic, 0),
@@ -148,7 +154,7 @@ func (lan *lanAgent) Run(ctx context.Context) {
 	}
 
 	// Spawn one goroutine per registered interface, for concurrent discoveries
-	fn := func(ctx0 context.Context, gen uint32, devs []sdk.Appliance) {
+	fn := func(ctx0 context.Context, gen uint32, devs []networking.ClientInfo) {
 		lan.learnAllCamerasSync(ctx0, gen, devs)
 	}
 	for _, itf := range lan.interfaces {
@@ -185,6 +191,7 @@ func (lan *lanAgent) Cameras() []*LanCamera {
 // RunTimers runs the main loop of the agent to trigger periodical actions
 func (lan *lanAgent) RunTimers(ctx context.Context) {
 	nextScan := time.After(0)
+	nextCheck := time.After(0)
 	for {
 		select {
 		case <-ctx.Done():
@@ -193,6 +200,14 @@ func (lan *lanAgent) RunTimers(ctx context.Context) {
 		case <-nextScan:
 			lan.triggerRescanAsync(ctx)
 			nextScan = time.After(lan.ScanPeriod)
+		case <-nextCheck:
+			httpClient.CloseIdleConnections()
+			utils.Logger.Info().
+				Str("action", "check").
+				Int("devices", len(lan.devices)).
+				Int("interfaces", len(lan.interfaces)).
+				Msg("lan")
+			nextCheck = time.After(lan.CheckPeriod)
 		}
 	}
 }
@@ -246,25 +261,34 @@ func (lan *lanAgent) registerInterface(itf string) {
 	lan.interfaces.Add(NewNIC(itf))
 }
 
-func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered sdk.Appliance) error {
-	dev, err := NewCamera(discovered)
+func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered networking.ClientInfo) error {
+	// Preliminary check of the existence of the camera, before starting expensive queries
+	lan.dataLock.Lock()
+	devInPlace, already := lan.devices.Get(discovered.Uuid)
+	if already && generation > devInPlace.generation {
+		devInPlace.generation = generation
+	}
+	lan.dataLock.Unlock()
+	if already {
+		return nil
+	}
+
+	appliance, err := sdk.NewDevice(ctx, discovered, networking.ClientAuth{Username: user, Password: password}, &httpClient)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
+	// Here come the http requests
+	dev := NewCamera(appliance)
+
 	lan.dataLock.Lock()
 	defer lan.dataLock.Unlock()
 
-	// If the camera is already know, let's just update its generation counter
-	devInPlace, ok := lan.devices.Get(dev.PK())
-	if ok {
+	// If the camera is already know, it's very unlikely but it may happen in case of a stale discovery,
+	// let's just update its generation counter
+	devInPlace, already = lan.devices.Get(dev.PK())
+	if already {
 		if generation > devInPlace.generation {
-			utils.Logger.Debug().
-				Str("key", devInPlace.PK()).
-				Str("endpoint", discovered.GetEndpoint("device")).
-				Uint32("gen", generation).
-				Str("action", "refresh").
-				Msg("device")
 			devInPlace.generation = generation
 		} // else ... stale discovery (why not?)
 	} else {
@@ -272,7 +296,7 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 		lan.devices.Add(dev)
 		utils.Logger.Info().
 			Str("key", dev.PK()).
-			Str("endpoint", discovered.GetEndpoint("device")).
+			Str("endpoint", discovered.Xaddr).
 			Uint32("gen", generation).
 			Str("action", "add").
 			Msg("device")
@@ -283,11 +307,11 @@ func (lan *lanAgent) learnSingleCameraSync(ctx context.Context, generation uint3
 	return nil
 }
 
-func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discovered []sdk.Appliance) {
+func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discovered []networking.ClientInfo) {
 	// Update the devices that match the
 	for _, dev := range discovered {
 		if err := lan.learnSingleCameraSync(ctx, gen, dev); err != nil {
-			utils.Logger.Warn().Str("url", dev.GetEndpoint("device")).Err(err).Msg("invalid device discovered")
+			utils.Logger.Warn().Str("url", dev.Xaddr).Err(err).Msg("invalid device discovered")
 		}
 	}
 

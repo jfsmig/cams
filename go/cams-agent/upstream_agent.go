@@ -121,7 +121,7 @@ func (us *upstreamAgent) getRegisterPeriod() time.Duration {
 func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 	utils.Logger.Trace().Str("action", "start").Msg("up")
 
-	registrationNext := time.After(us.getRegisterPeriod())
+	registrationNext := time.After(0)
 	client := pb.NewRegistrarClient(cnx)
 
 	camSwarm := utils.NewSwarm(ctx)
@@ -135,8 +135,9 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 
 		case <-registrationNext:
 			registrationNext = time.After(us.getRegisterPeriod())
-			ctx = metadata.AppendToOutgoingContext(ctx,
-				utils.KeyUser, us.cfg.User)
+			ctx2 := metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{
+				utils.KeyUser: us.cfg.User,
+			}))
 			for _, cam := range us.lan.Cameras() {
 				inReq := pb.RegisterRequest{
 					Id: &pb.StreamId{
@@ -144,7 +145,7 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 						Stream: cam.ID,
 					},
 				}
-				if _, err := client.Register(ctx, &inReq); err != nil {
+				if _, err := client.Register(ctx2, &inReq); err != nil {
 					utils.Logger.Warn().Err(err).
 						Str("action", "register").
 						Msg("up reg")

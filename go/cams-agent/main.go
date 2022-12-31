@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 
@@ -17,6 +18,10 @@ var (
 	user         = "admin"
 	password     = "ollyhgqo"
 	upstreamAddr = "127.0.0.1:6000"
+)
+
+var (
+	httpClient = http.Client{}
 )
 
 func main() {

@@ -4,8 +4,8 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/onvif/networking"
 
-	"github.com/jfsmig/onvif/sdk"
 	wsdiscovery "github.com/jfsmig/onvif/ws-discovery"
 
 	"github.com/jfsmig/cams/go/utils"
@@ -25,7 +25,7 @@ func NewNIC(name string) *Nic {
 
 func (ls *Nic) PK() string { return ls.ItfName }
 
-type RegistrationFunc func(ctx context.Context, gen uint32, discovered []sdk.Appliance)
+type RegistrationFunc func(ctx context.Context, gen uint32, discovered []networking.ClientInfo)
 
 func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 	utils.Logger.Debug().Str("itf", ls.ItfName).Str("action", "start").Msg("nic")
@@ -38,32 +38,14 @@ func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 			return
 
 		case generation := <-ls.trigger:
-			deviceClients, err := wsdiscovery.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
+			devices, err := wsdiscovery.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
 			if err != nil {
 				utils.Logger.Warn().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Err(err).Msg("nic")
 				continue
 			}
 
-			utils.Logger.Trace().Str("action", "rescan").Int("devices", len(deviceClients)).Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
-			register(ctx, generation, func() (out []sdk.Appliance) {
-				for i, _ := range deviceClients {
-					client := &deviceClients[i]
-					client.SetAuth(user, password)
-					appliance, err := sdk.WrapClient(client)
-					if err == nil {
-						out = append(out, appliance)
-					} else {
-						utils.Logger.Debug().
-							Str("action", "rescan-avoid").
-							Str("itf", ls.ItfName).
-							Str("key", appliance.GetUUID()).
-							Str("endpoint", appliance.GetDeviceEndpoint()).
-							Uint32("gen", generation).
-							Msg("nic")
-					}
-				}
-				return out
-			}())
+			utils.Logger.Trace().Str("action", "rescan").Int("devices", len(devices)).Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
+			register(ctx, generation, devices)
 		}
 	}
 }

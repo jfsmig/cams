@@ -6,7 +6,7 @@ require (
 	github.com/aler9/gortsplib v0.0.0-20220724100730-2c8889602c59
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jfsmig/go-bags v0.2.0
-	github.com/jfsmig/onvif v0.0.4-0.20221229122644-a6726c039be2
+	github.com/jfsmig/onvif v1.0.0
 	github.com/juju/errors v0.0.0-20220331221717-b38fca44723b
 	github.com/rs/zerolog v1.26.1
 	github.com/spf13/cobra v1.6.1
