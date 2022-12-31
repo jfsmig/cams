@@ -17,14 +17,19 @@ import (
 	"github.com/jfsmig/cams/go/utils"
 )
 
-type UpstreamCommand string
+type UpstreamCommandType uint32
+
+type UpstreamCommand struct {
+	cmdType  UpstreamCommandType
+	streamID string
+}
 
 const (
-	upstreamAgent_CommandPlay string = "p"
-	upstreamAgent_CommandStop        = "s"
-	upstreamAgent_CamUp              = "u"
-	upstreamAgent_CamDown            = "d"
-	upstreamAgent_CamVanished        = "e"
+	upstreamAgent_CommandPlay UpstreamCommandType = iota
+	upstreamAgent_CommandStop
+	upstreamAgent_CamUp
+	upstreamAgent_CamDown
+	upstreamAgent_CamVanished
 )
 
 type StreamExpectation string
@@ -42,7 +47,7 @@ type upstreamAgent struct {
 	cfg AgentConfig
 	lan *lanAgent
 
-	control       chan string
+	control       chan UpstreamCommand
 	singletonLock sync.Mutex
 
 	observers bags.SortedObj[string, CommandObserver]
@@ -61,7 +66,7 @@ func NewUpstreamAgent(cfg AgentConfig) *upstreamAgent {
 	return &upstreamAgent{
 		cfg:           cfg,
 		lan:           nil,
-		control:       make(chan string),
+		control:       make(chan UpstreamCommand),
 		singletonLock: sync.Mutex{},
 		observers:     make([]CommandObserver, 0),
 		medias:        make([]UpstreamMedia, 0),
@@ -96,9 +101,9 @@ func (us *upstreamAgent) DetachCommandObserver(observer CommandObserver) {
 func (us *upstreamAgent) UpdateCameraState(camID string, state CameraState) {
 	switch state {
 	case CameraState_Online:
-		us.control <- upstreamAgent_CamUp + camID
+		us.control <- UpstreamCommand{upstreamAgent_CamUp, camID}
 	case CameraState_Offline:
-		us.control <- upstreamAgent_CamDown + camID
+		us.control <- UpstreamCommand{upstreamAgent_CamDown, camID}
 	}
 }
 
@@ -150,10 +155,6 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 						Str("action", "register").
 						Msg("up reg")
 					return
-				} else {
-					utils.Logger.Debug().
-						Str("action", "register").
-						Msg("up reg")
 				}
 			}
 		case cmd := <-us.control:
@@ -162,11 +163,9 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 	}
 }
 
-func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm utils.Swarm) {
-	prefix := cmd[:1]
-	camID := cmd[1:]
-
-	switch prefix {
+func (us *upstreamAgent) onCommand(cmd UpstreamCommand, cnx *grpc.ClientConn, camSwarm utils.Swarm) {
+	camID := cmd.streamID
+	switch cmd.cmdType {
 	case upstreamAgent_CommandPlay: // From the hub
 		us.expectations[camID] = true
 		us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPlay)
@@ -187,6 +186,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 			cam.CommandPause()
 		}
 	case upstreamAgent_CamUp: // From the lan
+		utils.Logger.Info().Str("cmd", "up").Str("cam", camID).Msg("up ctrl")
 		if _, ok := us.medias.Get(camID); !ok {
 			um := NewUpstreamMedia(camID, us.cfg)
 			us.medias.Add(um)
@@ -196,6 +196,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 			camSwarm.Run(func(c context.Context) { um.Run(c, cnx) })
 		}
 	case upstreamAgent_CamDown: // From the lan
+		utils.Logger.Info().Str("cmd", "down").Str("cam", camID).Msg("up ctrl")
 		if cam, ok := us.medias.Get(camID); !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("up ctrl")
 			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
@@ -204,6 +205,7 @@ func (us *upstreamAgent) onCommand(cmd string, cnx *grpc.ClientConn, camSwarm ut
 			us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPause)
 		}
 	case upstreamAgent_CamVanished: // From the lan
+		utils.Logger.Info().Str("cmd", "vanished").Str("cam", camID).Msg("up ctrl")
 		if cam, ok := us.medias.Get(camID); !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("up ctrl")
 		} else {
@@ -248,9 +250,9 @@ func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) {
 
 		switch request.Command {
 		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY:
-			us.control <- upstreamAgent_CommandPlay + request.StreamID
+			us.control <- UpstreamCommand{upstreamAgent_CommandPlay, request.StreamID}
 		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_STOP:
-			us.control <- upstreamAgent_CommandStop + request.StreamID
+			us.control <- UpstreamCommand{upstreamAgent_CommandStop, request.StreamID}
 		}
 	}
 }

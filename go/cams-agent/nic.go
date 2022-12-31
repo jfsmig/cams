@@ -43,8 +43,6 @@ func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 				utils.Logger.Warn().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Err(err).Msg("nic")
 				continue
 			}
-
-			utils.Logger.Trace().Str("action", "rescan").Int("devices", len(devices)).Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 			register(ctx, generation, devices)
 		}
 	}
@@ -56,7 +54,6 @@ func (ls *Nic) TriggerRescanAsync(ctx context.Context, generation uint32) {
 		// generate no trigger if waiting for an exit
 	case ls.trigger <- generation:
 		// try to write a trigger token but ...
-		utils.Logger.Info().Str("action", "rescan triggered").Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 	default:
 		utils.Logger.Warn().Str("action", "rescan avoided").Str("itf", ls.ItfName).Uint32("gen", generation).Msg("nic")
 		// ... never wait if there are already pending trigger tokens

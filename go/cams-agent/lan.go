@@ -316,8 +316,10 @@ func (lan *lanAgent) learnAllCamerasSync(ctx context.Context, gen uint32, discov
 	}
 
 	toBePurged := lan.camsToBePurged(gen)
+	if len(toBePurged) > 0 {
+		utils.Logger.Info().Str("action", "purge").Interface("count", len(toBePurged)).Msg("lan")
+	}
 
-	utils.Logger.Trace().Str("action", "purge").Interface("count", len(toBePurged)).Msg("lan")
 	for _, dev := range toBePurged {
 		lan.dataLock.Lock()
 		lan.devices.Remove(dev.PK())
@@ -363,7 +365,6 @@ func delta[T Unsigned](hi, lo T) T {
 
 func (lan *lanAgent) triggerRescanAsync(ctx context.Context) {
 	gen := atomic.AddUint32(&lan.generation, 1)
-	utils.Logger.Trace().Str("action", "rescan").Uint32("gen", gen).Msg("lan")
 	for _, itf := range lan.interfaces {
 		itf.TriggerRescanAsync(ctx, gen)
 	}

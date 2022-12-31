@@ -12,11 +12,21 @@ import (
 	"github.com/jfsmig/cams/go/api/pb"
 )
 
+type CtrlCommandType uint32
+
+type CtrlCommand struct {
+	cmdType  CtrlCommandType
+	streamID string
+}
+
 const (
-	CtrlCommandPlay  = "play"
-	CtrlCommandStop  = "stop"
-	CtrlCommandExit  = "exit"
-	MediaCommandExit = "exit"
+	CtrlCommandType_Play CtrlCommandType = iota
+	CtrlCommandType_Stop
+	CtrlCommandType_Exit
+)
+
+const (
+	MediaCommand_Exit = "exit"
 )
 
 type AgentTwin struct {
@@ -24,7 +34,7 @@ type AgentTwin struct {
 	downstream pb.Downstream_ControlServer
 
 	// Control commands sent to the agents twin by the system
-	requests chan string
+	requests chan CtrlCommand
 
 	// notifications of terminated media goroutines
 	terminations chan StreamID
@@ -43,7 +53,7 @@ func NewAgentTwin(id AgentID, stream pb.Downstream_ControlServer) *AgentTwin {
 	agent := AgentTwin{}
 	agent.agentID = id
 	agent.downstream = stream
-	agent.requests = make(chan string, 1)
+	agent.requests = make(chan CtrlCommand, 1)
 	agent.terminations = make(chan StreamID, 32)
 	return &agent
 }
@@ -61,17 +71,17 @@ func _command(action string, agentToken string, args ...string) string {
 }
 
 func (agent *AgentTwin) Play(streamID string) error {
-	agent.requests <- _command(CtrlCommandPlay, string(agent.PK()), streamID)
+	agent.requests <- CtrlCommand{CtrlCommandType_Play, streamID}
 	return nil
 }
 
 func (agent *AgentTwin) Stop(streamID string) error {
-	agent.requests <- _command(CtrlCommandStop, string(agent.PK()), streamID)
+	agent.requests <- CtrlCommand{CtrlCommandType_Stop, streamID}
 	return nil
 }
 
 func (agent *AgentTwin) Exit() {
-	agent.requests <- _command(CtrlCommandExit, string(agent.PK()))
+	agent.requests <- CtrlCommand{CtrlCommandType_Exit, ""}
 }
 
 func (agent *AgentTwin) PK() AgentID {
@@ -102,6 +112,6 @@ func (as *agentStream) PK() StreamID {
 }
 
 func (as *agentStream) Exit() error {
-	as.requests <- MediaCommandExit
+	as.requests <- MediaCommand_Exit
 	return nil
 }

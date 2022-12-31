@@ -7,7 +7,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"strings"
 )
 
 func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
@@ -37,13 +36,12 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 			utils.Logger.Info().Str("user", user).Str("action", "shut").Msg("hub ctrl")
 			running = false
 		case cmd := <-agent.requests:
-			tokens := strings.Split(cmd, " ")
-			switch tokens[0] {
-			case CtrlCommandPlay: // Play a stream
-				stream.Send(&pb.DownstreamControlRequest{Command: pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY, StreamID: tokens[1]})
-			case CtrlCommandStop: // Stop a stream
-				stream.Send(&pb.DownstreamControlRequest{Command: pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_STOP, StreamID: tokens[1]})
-			case CtrlCommandExit: // abort the
+			switch cmd.cmdType {
+			case CtrlCommandType_Play: // Play a stream
+				stream.Send(&pb.DownstreamControlRequest{Command: pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY, StreamID: cmd.streamID})
+			case CtrlCommandType_Stop: // Stop a stream
+				stream.Send(&pb.DownstreamControlRequest{Command: pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_STOP, StreamID: cmd.streamID})
+			case CtrlCommandType_Exit: // abort the
 				running = false
 			}
 		case done := <-agent.terminations:
@@ -108,7 +106,7 @@ func (hub *grpcHub) Media(stream pb.Downstream_MediaUploadServer) error {
 		case req := <-upstream.requests:
 			utils.Logger.Warn().Str("action", "req").Msg("hub")
 			switch req {
-			case MediaCommandExit:
+			case MediaCommand_Exit:
 				running = false
 			default:
 				utils.Logger.Warn().Msg("Unexpected command")

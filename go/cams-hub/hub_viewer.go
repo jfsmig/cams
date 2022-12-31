@@ -9,7 +9,7 @@ import (
 )
 
 func (hub *grpcHub) Play(ctx context.Context, req *pb.PlayRequest) (*pb.None, error) {
-	utils.Logger.Info().Str("action", "play").Msg("view")
+	utils.Logger.Info().Str("action", "play").Interface("cam", req).Msg("view")
 
 	return &pb.None{}, hub.viewerStreamAction(req.Id.User, func(a *AgentTwin) error {
 		return a.Play(req.Id.Stream)
@@ -17,7 +17,7 @@ func (hub *grpcHub) Play(ctx context.Context, req *pb.PlayRequest) (*pb.None, er
 }
 
 func (hub *grpcHub) Pause(ctx context.Context, req *pb.PauseRequest) (*pb.None, error) {
-	utils.Logger.Info().Str("action", "pause").Msg("view")
+	utils.Logger.Info().Str("action", "pause").Interface("cam", req).Msg("view")
 
 	return &pb.None{}, hub.viewerStreamAction(req.Id.User, func(a *AgentTwin) error {
 		return a.Stop(req.Id.Stream)

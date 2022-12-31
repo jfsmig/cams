@@ -150,7 +150,7 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 
 	sourceUrl, err = cam.queryMediaUrl(ctx)
 	if err != nil {
-		return errors.Annotate(err, "getMediaUrl")
+		return errors.Annotate(err, "queryMediaUrl")
 	}
 
 	utils.Logger.Info().Str("host", sourceUrl.Host).Msg("start!")
@@ -230,6 +230,7 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 
 func (cam *LanCamera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
 	streamURI := cam.onvifClient.FetchStreamURI(ctx)
+	utils.Logger.Warn().Str("URL", streamURI).Msg("")
 	sourceUrl, err := url.Parse(streamURI)
 	if err != nil {
 		return nil, errors.Annotate(err, "parse")

@@ -16,12 +16,12 @@ import (
 	"github.com/jfsmig/cams/go/utils"
 )
 
-type UpstreamMediaCommand string
+type UpstreamMediaCommand uint32
 
 const (
-	upstreamMedia_CommandPlay  UpstreamMediaCommand = "1"
-	upstreamMedia_CommandPause                      = "0"
-	upstreamMedia_CommandShut                       = "X"
+	upstreamMedia_CommandPlay UpstreamMediaCommand = iota
+	upstreamMedia_CommandPause
+	upstreamMedia_CommandShut
 )
 
 type UpstreamMedia interface {
