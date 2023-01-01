@@ -73,8 +73,8 @@ github.com/inconshreveable/mousetrap v1.0.1 h1:U3uMjPSQEBMNp1lFxmllqCPM6P5u/Xq7P
 github.com/inconshreveable/mousetrap v1.0.1/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/jfsmig/go-bags v0.2.0 h1:HTsDEePSKtibW9YUScqJ7huc0Aqxwg5R+/sJwevYX3E=
 github.com/jfsmig/go-bags v0.2.0/go.mod h1:lqPP6v+A+AMY2fbkYeupwEu3SeJHpj71SUtsL1YIKGk=
-github.com/jfsmig/onvif v1.0.0 h1:soKQbA4PhZ0iclBadApVn7WCHYj9c0AEqL7hG87XwQM=
-github.com/jfsmig/onvif v1.0.0/go.mod h1:haqKiQ0LEoYcfDUpaCiJLhw9ntEEySsHVbTsCH3Z5t4=
+github.com/jfsmig/onvif v1.0.1-0.20230101005959-b98bb3791da1 h1:qI83t8J+Z+oZVDFeY+l9cNkeZhegBl6rsJhRnoqt+wk=
+github.com/jfsmig/onvif v1.0.1-0.20230101005959-b98bb3791da1/go.mod h1:haqKiQ0LEoYcfDUpaCiJLhw9ntEEySsHVbTsCH3Z5t4=
 github.com/juju/errors v0.0.0-20220331221717-b38fca44723b h1:AxFeSQJfcm2O3ov1wqAkTKYFsnMw2g1B4PkYujfAdkY=
 github.com/juju/errors v0.0.0-20220331221717-b38fca44723b/go.mod h1:jMGj9DWF/qbo91ODcfJq6z/RYc3FX3taCBZMCcpI4Ls=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
