@@ -1,6 +1,6 @@
 // Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
 
-package main
+package upstream
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/cams-agent/common"
 	"github.com/jfsmig/cams/go/utils"
 )
 
@@ -35,12 +36,12 @@ type UpstreamMedia interface {
 
 type upstreamMedia struct {
 	camID         string
-	cfg           AgentConfig
+	cfg           common.AgentConfig
 	control       chan UpstreamMediaCommand
 	singletonLock sync.Mutex
 }
 
-func NewUpstreamMedia(camID string, cfg AgentConfig) UpstreamMedia {
+func NewUpstreamMedia(camID string, cfg common.AgentConfig) UpstreamMedia {
 	return &upstreamMedia{
 		camID:         camID,
 		cfg:           cfg,
@@ -78,7 +79,7 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 
 	// Try to connect to the internal media bridge fed by the camera, until it either works or get cancelled
 	for ctx.Err() == nil {
-		if err = socketRtp.Dial(makeNorthRtp(um.camID)); err != nil {
+		if err = socketRtp.Dial(common.MakeNorthRtp(um.camID)); err != nil {
 			utils.Logger.Warn().Str("action", "north rtp dial").Err(err).Msg("up media")
 			time.Sleep(200 * time.Millisecond)
 		} else {
@@ -86,7 +87,7 @@ func (um *upstreamMedia) Run(ctx context.Context, cnx *grpc.ClientConn) {
 		}
 	}
 	for ctx.Err() == nil {
-		if err = socketRtcp.Dial(makeNorthRtcp(um.camID)); err != nil {
+		if err = socketRtcp.Dial(common.MakeNorthRtcp(um.camID)); err != nil {
 			utils.Logger.Warn().Str("action", "north rtcp dial").Err(err).Msg("up media")
 			time.Sleep(200 * time.Millisecond)
 		} else {

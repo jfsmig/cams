@@ -1,9 +1,10 @@
 // Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
 
-package main
+package upstream
 
 import (
 	"context"
+	"github.com/jfsmig/cams/go/cams-agent/lan"
 	"sync"
 	"time"
 
@@ -14,29 +15,23 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/cams-agent/common"
 	"github.com/jfsmig/cams/go/utils"
 )
 
-type UpstreamCommandType uint32
+type upstreamCommandType uint32
 
-type UpstreamCommand struct {
-	cmdType  UpstreamCommandType
+type upstreamCommand struct {
+	cmdType  upstreamCommandType
 	streamID string
 }
 
 const (
-	upstreamAgent_CommandPlay UpstreamCommandType = iota
+	upstreamAgent_CommandPlay upstreamCommandType = iota
 	upstreamAgent_CommandStop
 	upstreamAgent_CamUp
 	upstreamAgent_CamDown
 	upstreamAgent_CamVanished
-)
-
-type StreamExpectation string
-
-const (
-	UpstreamAgent_ExpectPlay  StreamExpectation = "play"
-	UpstreamAgent_ExpectPause                   = "pause"
 )
 
 var (
@@ -44,39 +39,35 @@ var (
 )
 
 type upstreamAgent struct {
-	cfg AgentConfig
-	lan *lanAgent
+	cfg common.AgentConfig
+	lan *lan.Agent
 
-	control       chan UpstreamCommand
+	control       chan upstreamCommand
 	singletonLock sync.Mutex
 
-	observers bags.SortedObj[string, CommandObserver]
-	medias    bags.SortedObj[string, UpstreamMedia]
+	streamObservers bags.SortedObj[string, common.StreamExpectancyObserver]
+	medias          bags.SortedObj[string, UpstreamMedia]
 
 	// One "true" entry means that the hub expects that stream to be played
 	expectations map[string]bool
 }
 
-type CommandObserver interface {
-	PK() string
-	UpdateStreamExpectation(camID string, cmd StreamExpectation)
-}
-
-func NewUpstreamAgent(cfg AgentConfig) *upstreamAgent {
+func NewUpstreamAgent(cfg common.AgentConfig) *upstreamAgent {
 	return &upstreamAgent{
-		cfg:           cfg,
-		lan:           nil,
-		control:       make(chan UpstreamCommand),
-		singletonLock: sync.Mutex{},
-		observers:     make([]CommandObserver, 0),
-		medias:        make([]UpstreamMedia, 0),
-		expectations:  make(map[string]bool),
+		cfg:             cfg,
+		lan:             nil,
+		control:         make(chan upstreamCommand),
+		singletonLock:   sync.Mutex{},
+		streamObservers: make([]common.StreamExpectancyObserver, 0),
+		medias:          make([]UpstreamMedia, 0),
+		expectations:    make(map[string]bool),
 	}
 }
 
+// PK also implements a CameraObserver
 func (us *upstreamAgent) PK() string { return "ua" }
 
-func (us *upstreamAgent) Run(ctx context.Context, lan *lanAgent) {
+func (us *upstreamAgent) Run(ctx context.Context, lan *lan.Agent) {
 	utils.Logger.Debug().Str("action", "start").Msg("up")
 
 	if !us.singletonLock.TryLock() {
@@ -90,28 +81,29 @@ func (us *upstreamAgent) Run(ctx context.Context, lan *lanAgent) {
 	}
 }
 
-func (us *upstreamAgent) AttachCommandObserver(observer CommandObserver) {
-	us.observers.Add(observer)
+func (us *upstreamAgent) AttachCommandObserver(observer common.StreamExpectancyObserver) {
+	us.streamObservers.Add(observer)
 }
 
-func (us *upstreamAgent) DetachCommandObserver(observer CommandObserver) {
-	us.observers.Remove(observer.PK())
+func (us *upstreamAgent) DetachCommandObserver(observer common.StreamExpectancyObserver) {
+	us.streamObservers.Remove(observer.PK())
 }
 
-func (us *upstreamAgent) UpdateCameraState(camID string, state CameraState) {
+// UpdateCameraState implements a CameraObserver
+func (us *upstreamAgent) UpdateCameraState(camID string, state common.CameraState) {
 	switch state {
-	case CameraState_Online:
-		us.control <- UpstreamCommand{upstreamAgent_CamUp, camID}
-	case CameraState_Offline:
-		us.control <- UpstreamCommand{upstreamAgent_CamDown, camID}
+	case common.CameraState_Online:
+		us.control <- upstreamCommand{upstreamAgent_CamUp, camID}
+	case common.CameraState_Offline:
+		us.control <- upstreamCommand{upstreamAgent_CamDown, camID}
 	}
 }
 
-// NotifyCameraExpectation reports a stream expectation to external observers.
+// notifyCameraExpectation reports a stream expectation to external streamObservers.
 // The call is dedicated to inform the camera that their stream is expected
 // to be played ASAP
-func (us *upstreamAgent) NotifyCameraExpectation(camID string, cmd StreamExpectation) {
-	for _, observer := range us.observers {
+func (us *upstreamAgent) notifyCameraExpectation(camID string, cmd common.StreamExpectation) {
+	for _, observer := range us.streamObservers {
 		observer.UpdateStreamExpectation(camID, cmd)
 	}
 }
@@ -163,12 +155,12 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) {
 	}
 }
 
-func (us *upstreamAgent) onCommand(cmd UpstreamCommand, cnx *grpc.ClientConn, camSwarm utils.Swarm) {
+func (us *upstreamAgent) onCommand(cmd upstreamCommand, cnx *grpc.ClientConn, camSwarm utils.Swarm) {
 	camID := cmd.streamID
 	switch cmd.cmdType {
 	case upstreamAgent_CommandPlay: // From the hub
 		us.expectations[camID] = true
-		us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPlay)
+		us.notifyCameraExpectation(camID, common.UpstreamAgent_ExpectPlay)
 		cam, ok := us.medias.Get(camID)
 		if !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("up ctrl")
@@ -178,7 +170,7 @@ func (us *upstreamAgent) onCommand(cmd UpstreamCommand, cnx *grpc.ClientConn, ca
 		}
 	case upstreamAgent_CommandStop: // From the hub
 		us.expectations[camID] = false
-		us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPause)
+		us.notifyCameraExpectation(camID, common.UpstreamAgent_ExpectPause)
 		if cam, ok := us.medias.Get(camID); !ok {
 			utils.Logger.Warn().Str("cam", camID).Err(ErrNoSuchCamera).Msg("up ctrl")
 			// FIXME(jfs): command for an inexistant camera. Maybe need to manage a rogue cloud service
@@ -202,7 +194,7 @@ func (us *upstreamAgent) onCommand(cmd UpstreamCommand, cnx *grpc.ClientConn, ca
 			// FIXME(jfs): command for an inexistant camera. Need to manage a rogue cloud service
 		} else {
 			cam.CommandPause()
-			us.NotifyCameraExpectation(camID, UpstreamAgent_ExpectPause)
+			us.notifyCameraExpectation(camID, common.UpstreamAgent_ExpectPause)
 		}
 	case upstreamAgent_CamVanished: // From the lan
 		utils.Logger.Info().Str("cmd", "vanished").Str("cam", camID).Msg("up ctrl")
@@ -250,14 +242,14 @@ func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) {
 
 		switch request.Command {
 		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY:
-			us.control <- UpstreamCommand{upstreamAgent_CommandPlay, request.StreamID}
+			us.control <- upstreamCommand{upstreamAgent_CommandPlay, request.StreamID}
 		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_STOP:
-			us.control <- UpstreamCommand{upstreamAgent_CommandStop, request.StreamID}
+			us.control <- upstreamCommand{upstreamAgent_CommandStop, request.StreamID}
 		}
 	}
 }
 
-func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, lan *lanAgent) {
+func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, lan *lan.Agent) {
 	utils.Logger.Trace().Str("action", "restart").Str("endpoint", us.cfg.Upstream.Address).Msg("up")
 
 	cnx, err := utils.DialInsecure(ctx, us.cfg.Upstream.Address)

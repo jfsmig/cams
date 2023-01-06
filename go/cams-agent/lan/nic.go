@@ -1,6 +1,6 @@
 // Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
 
-package main
+package lan
 
 import (
 	"context"
@@ -43,6 +43,7 @@ func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 				utils.Logger.Warn().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Err(err).Msg("nic")
 				continue
 			}
+			utils.Logger.Debug().Str("action", "rescan").Str("itf", ls.ItfName).Uint32("gen", generation).Int("found", len(devices)).Msg("nic")
 			register(ctx, generation, devices)
 		}
 	}

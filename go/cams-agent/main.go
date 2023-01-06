@@ -4,27 +4,21 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"os/signal"
 
 	"github.com/spf13/cobra"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
 
+	"github.com/jfsmig/cams/go/cams-agent/common"
+	"github.com/jfsmig/cams/go/cams-agent/lan"
+	"github.com/jfsmig/cams/go/cams-agent/upstream"
 	"github.com/jfsmig/cams/go/utils"
 )
 
-var (
-	user         = "admin"
-	password     = "ollyhgqo"
-	upstreamAddr = "127.0.0.1:6000"
-)
-
-var (
-	httpClient = http.Client{}
-)
-
 func main() {
+	flagSpeed := false
+
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Cams Agent",
@@ -32,13 +26,20 @@ func main() {
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// FIXME(jfs): load an external configuration file or CLI options
-			cfg := DefaultConfig()
+			cfg := common.DefaultConfig()
+			if flagSpeed {
+				cfg.RegisterPeriod = 1
+				cfg.ScanPeriod = 0
+				cfg.CheckPeriod = 1
+			}
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
 			defer cancel()
 
 			return runAgent(ctx, cfg)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&flagSpeed, "speed", "s", true, "TEST with fast loops")
 
 	if err := cmd.Execute(); err != nil {
 		utils.Logger.Fatal().Err(err).Str("action", "aborting").Msg("agent")
@@ -47,9 +48,9 @@ func main() {
 	}
 }
 
-func runAgent(ctx context.Context, cfg AgentConfig) error {
-	lan := NewLanAgent(cfg)
-	upstream := NewUpstreamAgent(cfg)
+func runAgent(ctx context.Context, cfg common.AgentConfig) error {
+	lan := lan.NewLanAgent(cfg)
+	upstream := upstream.NewUpstreamAgent(cfg)
 
 	// Let the upstream close the upstream for disappeared cameras
 	lan.AttachCameraObserver(upstream)

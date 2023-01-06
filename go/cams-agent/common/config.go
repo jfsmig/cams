@@ -1,6 +1,6 @@
 // Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
 
-package main
+package common
 
 import (
 	"bytes"
@@ -10,6 +10,13 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
+)
+
+const (
+	DefaultScanPeriod      = 60
+	DefaultRegisterPeriod  = 5
+	DefaultCheckPeriod     = 10
+	DefaultUpstreamTimeout = 30
 )
 
 type UpstreamConfig struct {
@@ -40,12 +47,12 @@ func DefaultConfig() AgentConfig {
 	return AgentConfig{
 		User:             "plop",
 		DiscoverPatterns: []string{"!lo", "!docker.*", ".*"},
-		ScanPeriod:       17,
-		CheckPeriod:      60,
-		RegisterPeriod:   5,
+		ScanPeriod:       DefaultScanPeriod,
+		CheckPeriod:      DefaultCheckPeriod,
+		RegisterPeriod:   DefaultRegisterPeriod,
 		Upstream: UpstreamConfig{
 			Address: "127.0.0.1:6000",
-			Timeout: 30,
+			Timeout: DefaultUpstreamTimeout,
 		},
 	}
 }
@@ -76,3 +83,8 @@ func (cfg *AgentConfig) LoadString(encoded string) error {
 	}
 	return nil
 }
+
+func MakeSouthRtp(camID string) string  { return "inproc://" + camID + "/MS" }
+func MakeNorthRtp(camID string) string  { return "inproc://" + camID + "/MN" }
+func MakeSouthRtcp(camID string) string { return "inproc://" + camID + "/CS" }
+func MakeNorthRtcp(camID string) string { return "inproc://" + camID + "/CN" }

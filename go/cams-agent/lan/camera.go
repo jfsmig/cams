@@ -1,9 +1,11 @@
 // Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
 
-package main
+package lan
 
 import (
 	"context"
+	"github.com/jfsmig/cams/go/cams-agent/common"
+	"go.nanomsg.org/mangos/v3"
 	"log"
 	"sync"
 	"time"
@@ -46,7 +48,7 @@ const (
 )
 
 // We assume only one stream per camera.
-type LanCamera struct {
+type Camera struct {
 	ID            string
 	generation    uint32
 	singletonLock sync.Mutex
@@ -60,9 +62,9 @@ type LanCamera struct {
 	group utils.Swarm
 }
 
-func NewCamera(appliance sdk.Appliance) *LanCamera {
+func NewCamera(appliance sdk.Appliance) *Camera {
 	transport := gortsplib.TransportUDP
-	return &LanCamera{
+	return &Camera{
 		ID:          appliance.GetUUID(),
 		generation:  0,
 		onvifClient: appliance,
@@ -78,11 +80,11 @@ func NewCamera(appliance sdk.Appliance) *LanCamera {
 	}
 }
 
-func runCam(cam *LanCamera) utils.SwarmFunc {
+func runCam(cam *Camera) utils.SwarmFunc {
 	return func(ctx context.Context) { cam.Run(ctx) }
 }
 
-func (cam *LanCamera) Run(ctx context.Context) {
+func (cam *Camera) Run(ctx context.Context) {
 	if !cam.singletonLock.TryLock() {
 		panic("BUG singleton only")
 	}
@@ -124,13 +126,13 @@ func (cam *LanCamera) Run(ctx context.Context) {
 	}
 }
 
-func (cam *LanCamera) PK() string  { return cam.ID }
-func (cam *LanCamera) Ping()       { cam.requests <- CamCommandPing }
-func (cam *LanCamera) Exit()       { cam.requests <- CamCommandExit }
-func (cam *LanCamera) PlayStream() { cam.requests <- CamCommandPlay }
-func (cam *LanCamera) StopStream() { cam.requests <- CamCommandPause }
+func (cam *Camera) PK() string  { return cam.ID }
+func (cam *Camera) Ping()       { cam.requests <- CamCommandPing }
+func (cam *Camera) Exit()       { cam.requests <- CamCommandExit }
+func (cam *Camera) PlayStream() { cam.requests <- CamCommandPlay }
+func (cam *Camera) StopStream() { cam.requests <- CamCommandPause }
 
-func (cam *LanCamera) runStream(ctx context.Context) {
+func (cam *Camera) runStream(ctx context.Context) {
 	for ctx.Err() == nil {
 		utils.Logger.Debug().Str("url", cam.ID).Str("action", "start").Msg("cam")
 		err := cam.runStreamOnce(ctx)
@@ -144,7 +146,7 @@ func (cam *LanCamera) runStream(ctx context.Context) {
 	utils.Logger.Info().Str("url", cam.ID).Str("action", "done").Msg("cam")
 }
 
-func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
+func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	var sourceUrl *url.URL
 	var err error
 
@@ -168,22 +170,25 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 		return errors.Annotate(err, "push socket")
 	}
 	defer sockRtp.Close()
-	if err = sockRtp.Dial(makeSouthRtp(cam.ID)); err != nil {
+	if err = sockRtp.Dial(common.MakeSouthRtp(cam.ID)); err != nil {
 		return errors.Annotate(err, "push connect")
 	}
+	sockRtp.SetOption(mangos.OptionNoDelay, true)
 
 	sockRtcp, err := push.NewSocket()
 	if err != nil {
 		return errors.Annotate(err, "push socket")
 	}
 	defer sockRtcp.Close()
-	if err = sockRtcp.Dial(makeSouthRtp(cam.ID)); err != nil {
+	if err = sockRtcp.Dial(common.MakeSouthRtp(cam.ID)); err != nil {
 		return errors.Annotate(err, "push connect")
 	}
+	sockRtcp.SetOption(mangos.OptionNoDelay, true)
 
 	cam.rtspClient.OnPacketRTP = func(ctx *gortsplib.ClientOnPacketRTPCtx) {
 		b, err := ctx.Packet.Marshal()
-		if err != nil {
+		if err == nil {
+			sockRtp.SetOption(mangos.OptionSendDeadline, -1)
 			err = sockRtp.Send(b)
 		}
 		utils.Logger.Debug().
@@ -197,7 +202,8 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 
 	cam.rtspClient.OnPacketRTCP = func(ctx *gortsplib.ClientOnPacketRTCPCtx) {
 		b, err := ctx.Packet.Marshal()
-		if err != nil {
+		if err == nil {
+			sockRtcp.SetOption(mangos.OptionSendDeadline, -1)
 			err = sockRtcp.Send(b)
 		}
 		utils.Logger.Debug().
@@ -228,7 +234,7 @@ func (cam *LanCamera) runStreamOnce(ctx context.Context) error {
 	return nil
 }
 
-func (cam *LanCamera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
+func (cam *Camera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
 	streamURI := cam.onvifClient.FetchStreamURI(ctx)
 	utils.Logger.Warn().Str("URL", streamURI).Msg("")
 	sourceUrl, err := url.Parse(streamURI)
@@ -238,7 +244,7 @@ func (cam *LanCamera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
 	return sourceUrl, nil
 }
 
-func (cam *LanCamera) onCmdExit() {
+func (cam *Camera) onCmdExit() {
 	switch cam.State {
 	case CamAgentOff:
 		panic("BUG unexpected state")
@@ -253,7 +259,7 @@ func (cam *LanCamera) onCmdExit() {
 	}
 }
 
-func (cam *LanCamera) onCmdPlay(ctx context.Context) {
+func (cam *Camera) onCmdPlay(ctx context.Context) {
 	switch cam.State {
 	case CamAgentOff:
 		panic("BUG unexpected state")
@@ -267,8 +273,8 @@ func (cam *LanCamera) onCmdPlay(ctx context.Context) {
 	case CamAgentIdle:
 		cam.State = CamAgentPlaying
 		cam.group = utils.NewGroup(ctx)
-		cam.group.Run(func(c context.Context) { pipeline(c, makeSouthRtp(cam.ID), makeNorthRtp(cam.ID)) })
-		cam.group.Run(func(c context.Context) { pipeline(c, makeSouthRtcp(cam.ID), makeNorthRtcp(cam.ID)) })
+		cam.group.Run(func(c context.Context) { pipeline(c, common.MakeSouthRtp(cam.ID), common.MakeNorthRtp(cam.ID)) })
+		cam.group.Run(func(c context.Context) { pipeline(c, common.MakeSouthRtcp(cam.ID), common.MakeNorthRtcp(cam.ID)) })
 		cam.group.Run(func(c context.Context) { cam.runStream(c) })
 		fallthrough
 	case CamAgentPlaying:
@@ -278,7 +284,7 @@ func (cam *LanCamera) onCmdPlay(ctx context.Context) {
 	}
 }
 
-func (cam *LanCamera) onCmdStop() {
+func (cam *Camera) onCmdStop() {
 	switch cam.State {
 	case CamAgentOff:
 		panic("BUG unexpected state")
@@ -302,7 +308,7 @@ func (cam *LanCamera) onCmdStop() {
 	}
 }
 
-func (cam *LanCamera) onCmdPing(ctx context.Context) {
+func (cam *Camera) onCmdPing(ctx context.Context) {
 	switch cam.State {
 	case CamAgentOff:
 		panic("BUG unexpected state")
