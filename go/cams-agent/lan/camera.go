@@ -161,8 +161,14 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	}
 	defer func() { _ = cam.rtspClient.Close() }()
 
-	if _, err := cam.rtspClient.Options(sourceUrl); err != nil {
+	if options, err := cam.rtspClient.Options(sourceUrl); err != nil {
 		return errors.Annotate(err, "options")
+	} else {
+		utils.Logger.Debug().Interface("options", options).Str("cam", cam.ID).Msg("camera")
+	}
+	tracks, trackUrl, _, err := cam.rtspClient.Describe(sourceUrl)
+	if err != nil {
+		return errors.Annotate(err, "describe")
 	}
 
 	sockRtp, err := push.NewSocket()
@@ -214,29 +220,19 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 			Msg("stream")
 	}
 
-	tracks, trackUrl, _, err := cam.rtspClient.Describe(sourceUrl)
-	if err != nil {
-		return errors.Annotate(err, "describe")
-	}
-
 	log.Printf("Tracks: %v", tracks)
-	err = cam.rtspClient.SetupAndPlay(tracks, trackUrl)
+	err = cam.rtspClient.SetupAndPlay(tracks[0:1], trackUrl)
 	if err != nil {
 		return errors.Annotate(err, "setupAndPlay")
 	}
 
-	time.Sleep(5 * time.Second)
-
-	if _, err := cam.rtspClient.Pause(); err != nil {
-		return errors.Annotate(err, "pause")
-	}
+	<-ctx.Done()
 
 	return nil
 }
 
 func (cam *Camera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
 	streamURI := cam.onvifClient.FetchStreamURI(ctx)
-	utils.Logger.Warn().Str("URL", streamURI).Msg("")
 	sourceUrl, err := url.Parse(streamURI)
 	if err != nil {
 		return nil, errors.Annotate(err, "parse")
