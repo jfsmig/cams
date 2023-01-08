@@ -10,14 +10,11 @@ import (
 	"github.com/spf13/cobra"
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
 
-	"github.com/jfsmig/cams/go/cams-agent/common"
-	"github.com/jfsmig/cams/go/cams-agent/lan"
-	"github.com/jfsmig/cams/go/cams-agent/upstream"
 	"github.com/jfsmig/cams/go/utils"
 )
 
 func main() {
-	flagSpeed := false
+	var flagSpeed bool
 
 	cmd := &cobra.Command{
 		Use:   "agent",
@@ -26,7 +23,7 @@ func main() {
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// FIXME(jfs): load an external configuration file or CLI options
-			cfg := common.DefaultConfig()
+			cfg := DefaultConfig()
 			if flagSpeed {
 				cfg.RegisterPeriod = 1
 				cfg.ScanPeriod = 0
@@ -39,7 +36,7 @@ func main() {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&flagSpeed, "speed", "s", true, "TEST with fast loops")
+	cmd.Flags().BoolVarP(&flagSpeed, "speed", "s", false, "TEST with fast loops")
 
 	if err := cmd.Execute(); err != nil {
 		utils.Logger.Fatal().Err(err).Str("action", "aborting").Msg("agent")
@@ -48,17 +45,9 @@ func main() {
 	}
 }
 
-func runAgent(ctx context.Context, cfg common.AgentConfig) error {
-	lan := lan.NewLanAgent(cfg)
-	upstream := upstream.NewUpstreamAgent(cfg)
-
-	// Let the upstream close the upstream for disappeared cameras
-	lan.AttachCameraObserver(upstream)
-	defer lan.DetachCameraObserver(upstream)
-
-	// Let the lan start/stop the streaming based on the command down the upstream
-	upstream.AttachCommandObserver(lan)
-	defer upstream.DetachCommandObserver(lan)
+func runAgent(ctx context.Context, cfg AgentConfig) error {
+	lan := NewLanAgent(cfg)
+	upstream := NewUpstreamAgent(cfg)
 
 	utils.Logger.Info().Str("action", "starting").Msg("agent")
 

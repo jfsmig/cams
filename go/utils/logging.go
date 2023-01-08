@@ -4,7 +4,6 @@ package utils
 
 import (
 	"context"
-	"fmt"
 	"github.com/juju/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
@@ -16,16 +15,11 @@ import (
 )
 
 var (
-	lengthMessage = 6
-)
-
-var (
 	// LoggerContext is the builder of a zerolog.Logger that is exposed to the application so that
 	// options at the CLI might alter the formatting and the output of the logs.
 	LoggerContext = zerolog.
 			New(zerolog.ConsoleWriter{
 			Out: os.Stderr, TimeFormat: time.RFC3339,
-			FormatMessage: func(itf interface{}) string { return adaptivePad(&lengthMessage, itf) },
 		}).With().Timestamp()
 
 	// Logger is a zerolog logger, that can be safely used from any part of the application.
@@ -33,23 +27,13 @@ var (
 	Logger = LoggerContext.Logger()
 )
 
-func adaptivePad(pLength *int, i interface{}) string {
-	b := strings.Builder{}
-	b.WriteString(fmt.Sprintf("%v", i))
-	for b.Len() < *pLength {
-		b.WriteRune(' ')
-	}
-	*pLength = b.Len()
-	return b.String()
-}
-
 type logEvt struct {
 	z     *zerolog.Event
 	start time.Time
 }
 
 func newEvent(method string) *logEvt {
-	return &logEvt{z: Logger.Trace().Str("uri", method), start: time.Now()}
+	return &logEvt{z: Logger.Debug().Str("uri", method), start: time.Now()}
 }
 
 func (evt *logEvt) send() { evt.z.Msg("access") }

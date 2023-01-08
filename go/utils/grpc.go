@@ -75,7 +75,7 @@ func DialTLS(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 }
 
 func DialInsecure(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	Logger.Info().Str("action", "dial").Str("addr", endpoint).Msg("grpc")
+	//Logger.Info().Str("action", "dial").Str("addr", endpoint).Msg("grpc")
 	//config := &tls.Config{InsecureSkipVerify: true,}
 	/*
 		options := []grpc_retry.CallOption{
