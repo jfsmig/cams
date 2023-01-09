@@ -66,7 +66,7 @@ func (hub *grpcHub) Control(stream pb.Downstream_ControlServer) error {
 }
 
 // An upload is starting.
-func (hub *grpcHub) Media(stream pb.Downstream_MediaUploadServer) error {
+func (hub *grpcHub) MediaUpload(stream pb.Downstream_MediaUploadServer) error {
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
 		err := status.Error(codes.InvalidArgument, "missing metadata")
