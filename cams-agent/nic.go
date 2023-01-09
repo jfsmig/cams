@@ -4,12 +4,10 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/cams/utils"
 	"github.com/jfsmig/onvif/networking"
-	"github.com/rs/zerolog"
-
 	wsdiscovery "github.com/jfsmig/onvif/ws-discovery"
-
-	"github.com/jfsmig/cams/go/utils"
+	"github.com/rs/zerolog"
 )
 
 type Nic struct {

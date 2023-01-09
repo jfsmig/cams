@@ -1,4 +1,4 @@
-module github.com/jfsmig/cams/go
+module github.com/jfsmig/cams
 
 go 1.19
 

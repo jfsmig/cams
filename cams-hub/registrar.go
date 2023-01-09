@@ -3,11 +3,10 @@
 package main
 
 import (
-	"sync"
-	"time"
-
 	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
+	"sync"
+	"time"
 )
 
 var (

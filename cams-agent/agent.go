@@ -4,7 +4,7 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/go/utils"
+	"github.com/jfsmig/cams/utils"
 	"github.com/jfsmig/go-bags"
 	"github.com/jfsmig/onvif/networking"
 	"github.com/jfsmig/onvif/sdk"

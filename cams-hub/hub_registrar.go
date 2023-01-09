@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/api/pb"
 )
 
 func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.None, error) {

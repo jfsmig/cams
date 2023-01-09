@@ -3,13 +3,11 @@
 package main
 
 import (
-	"strings"
-	"sync"
-
+	"github.com/jfsmig/cams/api/pb"
 	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
-
-	"github.com/jfsmig/cams/go/api/pb"
+	"strings"
+	"sync"
 )
 
 type CtrlCommandType uint32

@@ -4,13 +4,10 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/cams/utils"
+	"github.com/spf13/cobra"
 	"os"
 	"os/signal"
-
-	"github.com/spf13/cobra"
-	_ "go.nanomsg.org/mangos/v3/transport/inproc"
-
-	"github.com/jfsmig/cams/go/utils"
 )
 
 func main() {

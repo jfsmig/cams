@@ -4,16 +4,14 @@ package main
 
 import (
 	"context"
-	"sync"
-	"time"
-
 	"github.com/aler9/gortsplib"
+	"github.com/jfsmig/cams/api/pb"
+	"github.com/jfsmig/cams/utils"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/jfsmig/cams/go/api/pb"
-	"github.com/jfsmig/cams/go/utils"
+	"sync"
+	"time"
 )
 
 type upstreamCommandType uint32

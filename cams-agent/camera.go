@@ -4,7 +4,7 @@ package main
 
 import (
 	"context"
-	"github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/api/pb"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/metadata"
 	"sync"
@@ -16,7 +16,7 @@ import (
 	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
 
-	"github.com/jfsmig/cams/go/utils"
+	"github.com/jfsmig/cams/utils"
 )
 
 type CamAgentState uint32

@@ -4,15 +4,13 @@ package main
 
 import (
 	"context"
+	"github.com/jfsmig/cams/api/pb"
+	"github.com/jfsmig/cams/utils"
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
 	"net"
 	"os"
 	"os/signal"
-
-	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
-
-	"github.com/jfsmig/cams/go/api/pb"
-	"github.com/jfsmig/cams/go/utils"
 )
 
 func main() {

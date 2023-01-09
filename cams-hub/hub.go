@@ -4,11 +4,10 @@ package main
 
 import (
 	"context"
-	"sync"
-
-	"github.com/jfsmig/cams/go/api/pb"
-	"github.com/jfsmig/cams/go/utils"
+	"github.com/jfsmig/cams/api/pb"
+	"github.com/jfsmig/cams/utils"
 	"github.com/jfsmig/go-bags"
+	"sync"
 )
 
 type AgentID string

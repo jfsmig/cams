@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/jfsmig/cams/go/api/pb"
-	"github.com/jfsmig/cams/go/utils"
+	"github.com/jfsmig/cams/api/pb"
+	"github.com/jfsmig/cams/utils"
 	"github.com/juju/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
