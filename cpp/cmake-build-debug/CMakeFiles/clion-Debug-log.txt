@@ -1,0 +1,5 @@
+/snap/clion/219/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/snap/clion/219/bin/ninja/linux/ninja -G Ninja -S /home/jfs/workspace/public_git/github.com/jfsmig/cams/cpp -B /home/jfs/workspace/public_git/github.com/jfsmig/cams/cpp/cmake-build-debug
+-- Could NOT find PkgConfig (missing: PKG_CONFIG_EXECUTABLE) 
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/jfs/workspace/public_git/github.com/jfsmig/cams/cpp/cmake-build-debug

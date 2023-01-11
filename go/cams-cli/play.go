@@ -1,0 +1,24 @@
+// Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
+
+package main
+
+import (
+	"context"
+	pb2 "github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/utils"
+	"github.com/juju/errors"
+)
+
+func play(ctx context.Context, address, userID, streamID string) error {
+	cnx, err := utils.DialInsecure(ctx, address)
+	if err != nil {
+		return errors.Annotate(err, "dial")
+	}
+	defer cnx.Close()
+
+	client := pb2.NewViewerClient(cnx)
+	_, err = client.Play(ctx, &pb2.PlayRequest{
+		Id: &pb2.StreamId{User: userID, Stream: streamID},
+	})
+	return err
+}
