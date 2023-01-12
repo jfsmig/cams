@@ -78,13 +78,21 @@ RUN set -ex\
 #----------------------------------------------------------------------------#
 # Create an environment for a non-privileged user
 
+RUN set -ex \
+ && export GOBIN=/usr/bin \
+ && /usr/bin/go install golang.org/x/tools/cmd/goimports@latest \
+ && /usr/bin/go install golang.org/x/tools/cmd/stringer@latest \
+ && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest \
+ && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1 \
+ && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+
 ARG LOCAL_USER=dev
 ENV GOPATH=/home/$LOCAL_USER/go GOROOT=/usr/local/go
 
 RUN set -ex \
  && mkdir /etc/skel/build /etc/skel/go /etc/skel/src \
- && groupadd -g 500 $LOCAL_USER \
- && useradd -g 500 -u 500 -m $LOCAL_USER \
+ && groupadd -g 1000 $LOCAL_USER \
+ && useradd -g 1000 -u 1000 -m $LOCAL_USER \
  && usermod -aG sudo $LOCAL_USER \
  && usermod --shell /bin/bash $LOCAL_USER \
  && echo "export GIT_TRACE_PACKET=1" >> /home/$LOCAL_USER/.bashrc \
@@ -96,14 +104,6 @@ RUN set -ex \
  && mkdir -p -m 700 /home/$LOCAL_USER/.ssh/ \
  && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
  && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
-
-RUN set -ex \
- && export GOBIN=/usr/bin \
- && /usr/bin/go install golang.org/x/tools/cmd/goimports@latest \
- && /usr/bin/go install golang.org/x/tools/cmd/stringer@latest \
- && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest \
- && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28 \
- && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 
 USER ${LOCAL_USER}
 WORKDIR /home/${LOCAL_USER}
