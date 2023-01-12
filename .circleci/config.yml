@@ -5,27 +5,17 @@ version: 2.1
 jobs:
   build-and-test:
     docker:
-      - image: cimg/go:1.19
+      - image: jfsmig/cams-ci:latest
     steps:
       - checkout
       - run: cd go && go install ./...
       - run: cd go && go vet ./...
       - run: cd go && go test ./...
       - run:
-          name: "Install the system dependencies"
-          command: |
-            set -euxo pipefail
-            sudo apt-get update
-            sudo apt-get install --assume-yes --no-install-recommends protobuf-compiler protobuf-compiler-grpc
-            sudo apt-get install --assume-yes --no-install-recommends ffmpeg libavcodec-dev libavcodec58 libavdevice-dev libavdevice58 libavfilter-dev libavfilter7 libavformat-dev libavformat58 libavutil-dev libavutil56
-            sudo apt-get install --assume-yes --no-install-recommends nng-utils libnng1 libnng-dev
-      - run:
           name: "Install the dependencies (go)"
           command: |
             set -euxo pipefail
             cd go
-            go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-            go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
             go mod download
       - run:
           name: "Code generation (go)"

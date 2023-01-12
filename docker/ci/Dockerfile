@@ -15,7 +15,7 @@ RUN set -ex \
  && apt-get dist-upgrade -y \
  && apt-get install -y --no-install-recommends \
         ca-certificates \
-        gosu \
+        gosu sudo \
         git \
         curl \
         build-essential \
@@ -82,7 +82,7 @@ ENV GOPATH=/home/dev/go GOROOT=/usr/local/go
 ARG LOCAL_USER=dev
 
 RUN set -ex \
- && mkdir /etc/skel/{build,go,src} \
+ && mkdir /etc/skel/build /etc/skel/go /etc/skel/src \
  && groupadd -g 500 $LOCAL_USER \
  && useradd -g 500 -u 500 -m $LOCAL_USER \
  && usermod -aG sudo $LOCAL_USER \
@@ -90,6 +90,7 @@ RUN set -ex \
  && echo "export GIT_TRACE_PACKET=1" >> /home/$LOCAL_USER/.bashrc \
  && echo "export GIT_TRACE=1" >> /home/$LOCAL_USER/.bashrc \
  && echo "export GIT_CURL_VERBOSE=1" >> /home/$LOCAL_USER/.bashrc \
+ && echo "export PATH=\"/home/$LOCAL_USER/go/bin:\$PATH\"" >> /home/$LOCAL_USER/.bashrc \
  && mkdir -p -m 700 /home/$LOCAL_USER/.ssh/ \
  && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
  && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
@@ -104,5 +105,3 @@ RUN set -ex \
  && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28 \
  && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 
-USER 0
-WORKDIR /root
