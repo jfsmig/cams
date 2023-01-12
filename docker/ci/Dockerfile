@@ -74,12 +74,12 @@ RUN set -ex\
  && update-alternatives --install /usr/bin/go    go    /usr/local/go/bin/go    100 \
  && update-alternatives --install /usr/bin/gofmt gofmt /usr/local/go/bin/gofmt 100 \
  && rm -f /tmp/go.linux-amd64.tar.gz
-ENV GOPATH=/home/dev/go GOROOT=/usr/local/go
 
 #----------------------------------------------------------------------------#
 # Create an environment for a non-privileged user
 
 ARG LOCAL_USER=dev
+ENV GOPATH=/home/$LOCAL_USER/go GOROOT=/usr/local/go
 
 RUN set -ex \
  && mkdir /etc/skel/build /etc/skel/go /etc/skel/src \
@@ -91,6 +91,8 @@ RUN set -ex \
  && echo "export GIT_TRACE=1" >> /home/$LOCAL_USER/.bashrc \
  && echo "export GIT_CURL_VERBOSE=1" >> /home/$LOCAL_USER/.bashrc \
  && echo "export PATH=\"/home/$LOCAL_USER/go/bin:\$PATH\"" >> /home/$LOCAL_USER/.bashrc \
+ && echo "export GOPATH=\"/home/$LOCAL_USER/go\"" >> /home/$LOCAL_USER/.bashrc \
+ && echo "export GOROOT=\"/usr/local/go\"" >> /home/$LOCAL_USER/.bashrc \
  && mkdir -p -m 700 /home/$LOCAL_USER/.ssh/ \
  && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
  && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
@@ -104,4 +106,6 @@ RUN set -ex \
  && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest \
  && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28 \
  && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+
+CMD ["/usr/bin/bash", "-l"]
 

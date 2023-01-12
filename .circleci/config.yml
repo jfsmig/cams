@@ -8,29 +8,12 @@ jobs:
       - image: jfsmig/cams-ci:latest
     steps:
       - checkout
-      - run: cd go && go install ./...
+      - run: cd go && go mod download
+      - run: cd go && go generate ./... && git diff --quiet --exit-code
       - run: cd go && go vet ./...
+      - run: cd go && go install ./...
       - run: cd go && go test ./...
-      - run:
-          name: "Install the dependencies (go)"
-          command: |
-            set -euxo pipefail
-            cd go
-            go mod download
-      - run:
-          name: "Code generation (go)"
-          command: |
-            set -euxo pipefail
-            cd go
-            go generate ./...
-            git diff --quiet --exit-code
-      - run:
-          name: "Build (c++)"
-          command: |
-            set -euxo pipefail
-            cd cpp
-            cmake .
-            make -j 4
+      - run: cd cpp && cmake . && make -j $(nproc --ignore=1)
 
 workflows:
   build-and-test-workflow:
