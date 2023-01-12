@@ -97,15 +97,16 @@ RUN set -ex \
  && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
  && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
 
-USER ${LOCAL_USER}
-WORKDIR /home/${LOCAL_USER}
-
 RUN set -ex \
+ && export GOBIN=/usr/bin \
  && /usr/bin/go install golang.org/x/tools/cmd/goimports@latest \
  && /usr/bin/go install golang.org/x/tools/cmd/stringer@latest \
  && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest \
  && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28 \
  && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+
+USER ${LOCAL_USER}
+WORKDIR /home/${LOCAL_USER}
 
 CMD ["/usr/bin/bash", "-l"]
 
