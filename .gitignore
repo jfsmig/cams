@@ -2,3 +2,6 @@
 ### IDE config files
 .idea/
 **/.idea/
+
+**/cmake-build-*
+

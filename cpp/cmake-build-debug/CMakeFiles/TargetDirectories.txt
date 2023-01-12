@@ -1,3 +1,0 @@
-/home/jfs/workspace/public_git/github.com/jfsmig/cams/cpp/cmake-build-debug/CMakeFiles/fmp4.dir
-/home/jfs/workspace/public_git/github.com/jfsmig/cams/cpp/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/jfs/workspace/public_git/github.com/jfsmig/cams/cpp/cmake-build-debug/CMakeFiles/rebuild_cache.dir

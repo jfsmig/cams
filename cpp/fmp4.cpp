@@ -17,8 +17,7 @@ extern "C" int write_packet(void *opaque, uint8_t *buf, int buf_size) {}
 
 extern "C" int64_t seek(void *opaque, int64_t offset, int whence) {}
 
-int main(int argc, char *argv[]) {
-    (void) argc, (void) argv;
+int test() {
     const char *filename = "testvideo.fmp4";
 
     // https://blog.kevmo314.com/custom-rtp-io-with-ffmpeg.html
@@ -53,7 +52,7 @@ a=fmtp:96 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f
     AVIOContext * avio_in = avio_alloc_context(
             readbuf.data(), readbuf.size(),1,
             nullptr, &read_packet, &write_packet, NULL);
-    
+
     avformat_close_input(&input_format_context);
     avformat_free_context(input_format_context);
 
