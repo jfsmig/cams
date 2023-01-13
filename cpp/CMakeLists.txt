@@ -9,6 +9,15 @@ find_program(PROTOBUF_PROTOC protoc)
 find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 
 pkg_check_modules(GRPCPP REQUIRED grpc++)
+pkg_check_modules(PROTOBUF REQUIRED protobuf)
+pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
+    libavfilter
+    libavformat
+    libavcodec
+    libswresample
+    libswscale
+    libavutil
+)
 
 add_custom_command(
       OUTPUT
@@ -34,8 +43,20 @@ add_executable(cams-rtp-to-hls
         fmp4.cpp)
 
 target_include_directories(cams-rtp-to-hls PUBLIC
-        ${GRPCPP_INCLUDE_DIRS})
+        ${LIBAV_INCLUDE_DIRS}
+        ${GRPCPP_INCLUDE_DIRS}
+        ${PROTOBUF_INCLUDE_DIRS})
+
 target_link_directories(cams-rtp-to-hls PUBLIC
-        ${GRPCPP_LIBRARY_DIRS})
+        ${LIBAV_LIBRARY_DIRS}
+        ${GRPCPP_LIBRARY_DIRS}
+        ${PROTOBUF_LIBRARY_DIRS})
+
 target_link_libraries(cams-rtp-to-hls
-        ${GRPCPP_LIBRARIES})
+        ${GRPCPP_LIBRARIES}
+        ${GRPCPP_STATIC_LIBRARIES}
+        ${PROTOBUF_LIBRARIES}
+        ${PROTOBUF_STATIC_LIBRARIES}
+        ${LIBAV_LIBRARIES}
+        ${LIBAV_STATIC_LIBRARIES}
+)

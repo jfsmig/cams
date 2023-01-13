@@ -34,6 +34,40 @@ RUN set -ex \
         libavfilter7 libavfilter-dev \
         libavformat58 libavformat-dev \
         libavutil56 libavutil-dev \
+ && apt-get install -y --no-install-recommends \
+        libmysofa-dev libmysofa-utils libmysofa1 \
+	libvidstab1.1 libvidstab-dev \
+	libva2 libva-dev \
+	libass-dev libass9 \
+	libpocketsphinx3 libpocketsphinx-dev \
+	libsphinxbase-dev libsphinxbase3 \
+	libbs2b-dev libbs2b0 \
+	liblilv-0-0 liblilv-dev \
+	libsratom-0-0 libsratom-dev \
+	libsord-0-0 libsord-dev \
+	libserd-0-0 libserd-dev \
+	librubberband-dev librubberband2 \
+	libsamplerate0 libsamplerate0-dev \
+	libflite1 flite1-dev \
+	libzmq5 libzmq3-dev \
+	libzimg-dev libzimg2 \
+	libmfx-dev libmfx1 \
+	opencl-c-headers opencl-headers opencl-clhpp-headers nvidia-opencl-dev \
+	libbz2-1.0 libbz2-dev \
+	libgme-dev libgme0 \
+	libopenmpt-dev libopenmpt0 \
+	libchromaprint-dev libchromaprint1 \
+	libbluray2 libbluray-dev \
+	libgnutls28-dev libgnutls30 \
+	librabbitmq-dev librabbitmq4 \
+	libsrt-gnutls-dev \
+	libssh-4 libssh-dev \
+	libvpx-dev libvpx7 \
+	libwebp7 libwebp-dev \
+	libwebpmux3 \
+	liblzma-dev liblzma5 \
+	libdav1d-dev libdav1d5 \
+	gir1.2-rsvg-2.0 \
  && update-ca-certificates \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
