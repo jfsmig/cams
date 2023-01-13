@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(cams)
+project(cams-cpp)
 
 set(CMAKE_CXX_STANDARD 20)
 find_package(PkgConfig)
@@ -42,15 +42,22 @@ add_executable(cams-rtp-to-hls
         main.cpp
         fmp4.cpp)
 
+target_compile_options(cams-rtp-to-hls PUBLIC
+        -g -pipe -Wall -Wextra
+        $<$<CONFIG:DEBUG>:-Og -fno-inline>
+        $<$<CONFIG:RELEASE>:-O2>)
+
 target_include_directories(cams-rtp-to-hls PUBLIC
         ${LIBAV_INCLUDE_DIRS}
         ${GRPCPP_INCLUDE_DIRS}
-        ${PROTOBUF_INCLUDE_DIRS})
+        ${PROTOBUF_INCLUDE_DIRS}
+)
 
 target_link_directories(cams-rtp-to-hls PUBLIC
         ${LIBAV_LIBRARY_DIRS}
         ${GRPCPP_LIBRARY_DIRS}
-        ${PROTOBUF_LIBRARY_DIRS})
+        ${PROTOBUF_LIBRARY_DIRS}
+)
 
 target_link_libraries(cams-rtp-to-hls
         ${GRPCPP_LIBRARIES}

@@ -10,8 +10,6 @@ RUN set -ex \
 # Install the system dependencies of the installation process
 RUN set -ex \
  && apt-get update \
- && apt-get install -y --no-install-recommends \
- && apt-get autoremove --purge \
  && apt-get dist-upgrade -y \
  && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -35,40 +33,60 @@ RUN set -ex \
         libavformat58 libavformat-dev \
         libavutil56 libavutil-dev \
  && apt-get install -y --no-install-recommends \
-        libmysofa-dev libmysofa-utils libmysofa1 \
-	libvidstab1.1 libvidstab-dev \
-	libva2 libva-dev \
-	libass-dev libass9 \
-	libpocketsphinx3 libpocketsphinx-dev \
-	libsphinxbase-dev libsphinxbase3 \
-	libbs2b-dev libbs2b0 \
-	liblilv-0-0 liblilv-dev \
-	libsratom-0-0 libsratom-dev \
-	libsord-0-0 libsord-dev \
-	libserd-0-0 libserd-dev \
-	librubberband-dev librubberband2 \
-	libsamplerate0 libsamplerate0-dev \
-	libflite1 flite1-dev \
-	libzmq5 libzmq3-dev \
-	libzimg-dev libzimg2 \
-	libmfx-dev libmfx1 \
-	opencl-c-headers opencl-headers opencl-clhpp-headers nvidia-opencl-dev \
-	libbz2-1.0 libbz2-dev \
-	libgme-dev libgme0 \
-	libopenmpt-dev libopenmpt0 \
-	libchromaprint-dev libchromaprint1 \
-	libbluray2 libbluray-dev \
-	libgnutls28-dev libgnutls30 \
-	librabbitmq-dev librabbitmq4 \
-	libsrt-gnutls-dev \
-	libssh-4 libssh-dev \
-	libvpx-dev libvpx7 \
-	libwebp7 libwebp-dev \
-	libwebpmux3 \
-	liblzma-dev liblzma5 \
-	libdav1d-dev libdav1d5 \
-	gir1.2-rsvg-2.0 \
+        libmysofa-dev libmysofa1 \
+        libvidstab-dev libvidstab1.1 \
+        libva-dev libva2 \
+        libass-dev libass9 \
+        libpocketsphinx-dev libpocketsphinx3 \
+        libsphinxbase-dev libsphinxbase3 \
+        libbs2b-dev libbs2b0 \
+        liblilv-dev liblilv-0-0 \
+        libsratom-dev libsratom-0-0 \
+        libsord-dev libsord-0-0 \
+        libserd-dev libserd-0-0 \
+        librubberband-dev librubberband2 \
+        libsamplerate0-dev libsamplerate0 \
+        flite1-dev libflite1 \
+        libzmq3-dev libzmq5 \
+        libzimg-dev libzimg2 \
+        libmfx-dev libmfx1 \
+        opencl-c-headers opencl-headers opencl-clhpp-headers nvidia-opencl-dev \
+        libbz2-dev libbz2-1.0 \
+        libgme-dev libgme0 \
+        libopenmpt-dev libopenmpt0 \
+        libchromaprint-dev libchromaprint1 \
+        libbluray-dev libbluray2 \
+        libgnutls28-dev libgnutls30 \
+        librabbitmq-dev librabbitmq4 \
+        libsrt-gnutls-dev \
+        libssh-dev libssh-4 \
+        libvpx-dev libvpx7 \
+        libwebp-dev libwebp7 \
+        libwebpmux3 \
+        liblzma-dev liblzma5 \
+        libdav1d-dev libdav1d5 \
+        librsvg2-dev librsvg2-2 \
+        libzvbi-dev libzvbi0 \
+        libsnappy-dev libsnappy1v5 \
+        libaom-dev libaom3 \
+        libcodec2-dev libcodec2-1.0 \
+        libgsm1-dev libgsm1 \
+        libmp3lame-dev libmp3lame0 \
+        libopenjp2-7-dev libopenjp2-7 \
+        libopus-dev libopus0 \
+        libtheora-dev libtheora0 \
+        libspeex-dev libspeex1 \
+        libshine-dev libshine3 \
+        libtwolame-dev libtwolame0 \
+        libx264-dev libx264-163 \
+        libx265-dev libx265-199 \
+        libxvidcore-dev libxvidcore4 \
+        libsoxr-dev libsoxr-lsr0 \
+        libvdpau-dev libvdpau1 \
+        libdrm-dev libdrm2 \
+        libxv-dev libxv1 \
  && update-ca-certificates \
+ && apt-get autoremove --purge \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 

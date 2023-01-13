@@ -18,50 +18,46 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// DownstreamClient is the client API for Downstream service.
+// ControllerClient is the client API for Controller service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type DownstreamClient interface {
+type ControllerClient interface {
 	// Stream of commands from the server to the client
-	Control(ctx context.Context, opts ...grpc.CallOption) (Downstream_ControlClient, error)
-	// Stream of media frames from the client to the server
-	// There should be at most one long-standing call to MediaUpload per agent connected
-	// to the cloud.
-	MediaUpload(ctx context.Context, opts ...grpc.CallOption) (Downstream_MediaUploadClient, error)
+	Control(ctx context.Context, opts ...grpc.CallOption) (Controller_ControlClient, error)
 }
 
-type downstreamClient struct {
+type controllerClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewDownstreamClient(cc grpc.ClientConnInterface) DownstreamClient {
-	return &downstreamClient{cc}
+func NewControllerClient(cc grpc.ClientConnInterface) ControllerClient {
+	return &controllerClient{cc}
 }
 
-func (c *downstreamClient) Control(ctx context.Context, opts ...grpc.CallOption) (Downstream_ControlClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Downstream_ServiceDesc.Streams[0], "/cams.api.hub.Downstream/Control", opts...)
+func (c *controllerClient) Control(ctx context.Context, opts ...grpc.CallOption) (Controller_ControlClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Controller_ServiceDesc.Streams[0], "/cams.api.hub.Controller/Control", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &downstreamControlClient{stream}
+	x := &controllerControlClient{stream}
 	return x, nil
 }
 
-type Downstream_ControlClient interface {
+type Controller_ControlClient interface {
 	Send(*None) error
 	Recv() (*DownstreamControlRequest, error)
 	grpc.ClientStream
 }
 
-type downstreamControlClient struct {
+type controllerControlClient struct {
 	grpc.ClientStream
 }
 
-func (x *downstreamControlClient) Send(m *None) error {
+func (x *controllerControlClient) Send(m *None) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *downstreamControlClient) Recv() (*DownstreamControlRequest, error) {
+func (x *controllerControlClient) Recv() (*DownstreamControlRequest, error) {
 	m := new(DownstreamControlRequest)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -69,30 +65,121 @@ func (x *downstreamControlClient) Recv() (*DownstreamControlRequest, error) {
 	return m, nil
 }
 
-func (c *downstreamClient) MediaUpload(ctx context.Context, opts ...grpc.CallOption) (Downstream_MediaUploadClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Downstream_ServiceDesc.Streams[1], "/cams.api.hub.Downstream/MediaUpload", opts...)
+// ControllerServer is the server API for Controller service.
+// All implementations must embed UnimplementedControllerServer
+// for forward compatibility
+type ControllerServer interface {
+	// Stream of commands from the server to the client
+	Control(Controller_ControlServer) error
+	mustEmbedUnimplementedControllerServer()
+}
+
+// UnimplementedControllerServer must be embedded to have forward compatible implementations.
+type UnimplementedControllerServer struct {
+}
+
+func (UnimplementedControllerServer) Control(Controller_ControlServer) error {
+	return status.Errorf(codes.Unimplemented, "method Control not implemented")
+}
+func (UnimplementedControllerServer) mustEmbedUnimplementedControllerServer() {}
+
+// UnsafeControllerServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ControllerServer will
+// result in compilation errors.
+type UnsafeControllerServer interface {
+	mustEmbedUnimplementedControllerServer()
+}
+
+func RegisterControllerServer(s grpc.ServiceRegistrar, srv ControllerServer) {
+	s.RegisterService(&Controller_ServiceDesc, srv)
+}
+
+func _Controller_Control_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ControllerServer).Control(&controllerControlServer{stream})
+}
+
+type Controller_ControlServer interface {
+	Send(*DownstreamControlRequest) error
+	Recv() (*None, error)
+	grpc.ServerStream
+}
+
+type controllerControlServer struct {
+	grpc.ServerStream
+}
+
+func (x *controllerControlServer) Send(m *DownstreamControlRequest) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *controllerControlServer) Recv() (*None, error) {
+	m := new(None)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// Controller_ServiceDesc is the grpc.ServiceDesc for Controller service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Controller_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cams.api.hub.Controller",
+	HandlerType: (*ControllerServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Control",
+			Handler:       _Controller_Control_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "hub.proto",
+}
+
+// UploaderClient is the client API for Uploader service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type UploaderClient interface {
+	// Stream of media frames from the client to the server
+	// There should be at most one long-standing call to MediaUpload per agent connected
+	// to the cloud.
+	MediaUpload(ctx context.Context, opts ...grpc.CallOption) (Uploader_MediaUploadClient, error)
+}
+
+type uploaderClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewUploaderClient(cc grpc.ClientConnInterface) UploaderClient {
+	return &uploaderClient{cc}
+}
+
+func (c *uploaderClient) MediaUpload(ctx context.Context, opts ...grpc.CallOption) (Uploader_MediaUploadClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Uploader_ServiceDesc.Streams[0], "/cams.api.hub.Uploader/MediaUpload", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &downstreamMediaUploadClient{stream}
+	x := &uploaderMediaUploadClient{stream}
 	return x, nil
 }
 
-type Downstream_MediaUploadClient interface {
+type Uploader_MediaUploadClient interface {
 	Send(*DownstreamMediaFrame) error
 	CloseAndRecv() (*None, error)
 	grpc.ClientStream
 }
 
-type downstreamMediaUploadClient struct {
+type uploaderMediaUploadClient struct {
 	grpc.ClientStream
 }
 
-func (x *downstreamMediaUploadClient) Send(m *DownstreamMediaFrame) error {
+func (x *uploaderMediaUploadClient) Send(m *DownstreamMediaFrame) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *downstreamMediaUploadClient) CloseAndRecv() (*None, error) {
+func (x *uploaderMediaUploadClient) CloseAndRecv() (*None, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
@@ -103,87 +190,56 @@ func (x *downstreamMediaUploadClient) CloseAndRecv() (*None, error) {
 	return m, nil
 }
 
-// DownstreamServer is the server API for Downstream service.
-// All implementations must embed UnimplementedDownstreamServer
+// UploaderServer is the server API for Uploader service.
+// All implementations must embed UnimplementedUploaderServer
 // for forward compatibility
-type DownstreamServer interface {
-	// Stream of commands from the server to the client
-	Control(Downstream_ControlServer) error
+type UploaderServer interface {
 	// Stream of media frames from the client to the server
 	// There should be at most one long-standing call to MediaUpload per agent connected
 	// to the cloud.
-	MediaUpload(Downstream_MediaUploadServer) error
-	mustEmbedUnimplementedDownstreamServer()
+	MediaUpload(Uploader_MediaUploadServer) error
+	mustEmbedUnimplementedUploaderServer()
 }
 
-// UnimplementedDownstreamServer must be embedded to have forward compatible implementations.
-type UnimplementedDownstreamServer struct {
+// UnimplementedUploaderServer must be embedded to have forward compatible implementations.
+type UnimplementedUploaderServer struct {
 }
 
-func (UnimplementedDownstreamServer) Control(Downstream_ControlServer) error {
-	return status.Errorf(codes.Unimplemented, "method Control not implemented")
-}
-func (UnimplementedDownstreamServer) MediaUpload(Downstream_MediaUploadServer) error {
+func (UnimplementedUploaderServer) MediaUpload(Uploader_MediaUploadServer) error {
 	return status.Errorf(codes.Unimplemented, "method MediaUpload not implemented")
 }
-func (UnimplementedDownstreamServer) mustEmbedUnimplementedDownstreamServer() {}
+func (UnimplementedUploaderServer) mustEmbedUnimplementedUploaderServer() {}
 
-// UnsafeDownstreamServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to DownstreamServer will
+// UnsafeUploaderServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to UploaderServer will
 // result in compilation errors.
-type UnsafeDownstreamServer interface {
-	mustEmbedUnimplementedDownstreamServer()
+type UnsafeUploaderServer interface {
+	mustEmbedUnimplementedUploaderServer()
 }
 
-func RegisterDownstreamServer(s grpc.ServiceRegistrar, srv DownstreamServer) {
-	s.RegisterService(&Downstream_ServiceDesc, srv)
+func RegisterUploaderServer(s grpc.ServiceRegistrar, srv UploaderServer) {
+	s.RegisterService(&Uploader_ServiceDesc, srv)
 }
 
-func _Downstream_Control_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(DownstreamServer).Control(&downstreamControlServer{stream})
+func _Uploader_MediaUpload_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(UploaderServer).MediaUpload(&uploaderMediaUploadServer{stream})
 }
 
-type Downstream_ControlServer interface {
-	Send(*DownstreamControlRequest) error
-	Recv() (*None, error)
-	grpc.ServerStream
-}
-
-type downstreamControlServer struct {
-	grpc.ServerStream
-}
-
-func (x *downstreamControlServer) Send(m *DownstreamControlRequest) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *downstreamControlServer) Recv() (*None, error) {
-	m := new(None)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func _Downstream_MediaUpload_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(DownstreamServer).MediaUpload(&downstreamMediaUploadServer{stream})
-}
-
-type Downstream_MediaUploadServer interface {
+type Uploader_MediaUploadServer interface {
 	SendAndClose(*None) error
 	Recv() (*DownstreamMediaFrame, error)
 	grpc.ServerStream
 }
 
-type downstreamMediaUploadServer struct {
+type uploaderMediaUploadServer struct {
 	grpc.ServerStream
 }
 
-func (x *downstreamMediaUploadServer) SendAndClose(m *None) error {
+func (x *uploaderMediaUploadServer) SendAndClose(m *None) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *downstreamMediaUploadServer) Recv() (*DownstreamMediaFrame, error) {
+func (x *uploaderMediaUploadServer) Recv() (*DownstreamMediaFrame, error) {
 	m := new(DownstreamMediaFrame)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -191,23 +247,17 @@ func (x *downstreamMediaUploadServer) Recv() (*DownstreamMediaFrame, error) {
 	return m, nil
 }
 
-// Downstream_ServiceDesc is the grpc.ServiceDesc for Downstream service.
+// Uploader_ServiceDesc is the grpc.ServiceDesc for Uploader service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Downstream_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "cams.api.hub.Downstream",
-	HandlerType: (*DownstreamServer)(nil),
+var Uploader_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "cams.api.hub.Uploader",
+	HandlerType: (*UploaderServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Control",
-			Handler:       _Downstream_Control_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-		{
 			StreamName:    "MediaUpload",
-			Handler:       _Downstream_MediaUpload_Handler,
+			Handler:       _Uploader_MediaUpload_Handler,
 			ClientStreams: true,
 		},
 	},

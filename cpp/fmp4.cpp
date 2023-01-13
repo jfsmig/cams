@@ -7,15 +7,17 @@
 #include <iostream>
 #include <array>
 
+extern "C" {
 #include <libavformat/avformat.h>
 #include <libavcodec/avcodec.h>
 #include <libavutil/opt.h>
+}
 
-extern "C" int read_packet(void *opaque, uint8_t *buf, int buf_size) {}
+static int read_packet(void *opaque, uint8_t *buf, int buf_size) {}
 
-extern "C" int write_packet(void *opaque, uint8_t *buf, int buf_size) {}
+static int write_packet(void *opaque, uint8_t *buf, int buf_size) {}
 
-extern "C" int64_t seek(void *opaque, int64_t offset, int whence) {}
+static int64_t seek(void *opaque, int64_t offset, int whence) {}
 
 int test() {
     const char *filename = "testvideo.fmp4";

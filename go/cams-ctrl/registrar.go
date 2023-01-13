@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
 	"sync"
@@ -58,4 +60,13 @@ func (r *registrarInMem) ListById(start string) ([]StreamRecord, error) {
 		})
 	}
 	return out, nil
+}
+
+func (hub *grpcHub) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.None, error) {
+	err := hub.registrar.Register(StreamRegistration{req.Id.Stream, req.Id.User})
+	if err != nil {
+		return nil, err
+	} else {
+		return &pb.None{}, nil
+	}
 }

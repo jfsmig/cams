@@ -239,21 +239,21 @@ const char descriptor_table_protodef_hub_2eproto[] PROTOBUF_SECTION_VARIABLE(pro
   "STREAM_MEDIA_FRAME_TYPE_UNSPECIFIED\020\000\022#\n"
   "\037DOWNSTREAM_MEDIA_FRAME_TYPE_RTP\020\001\022$\n DO"
   "WNSTREAM_MEDIA_FRAME_TYPE_RTCP\020\002\022#\n\037DOWN"
-  "STREAM_MEDIA_FRAME_TYPE_SDP\020\0032\244\001\n\nDownst"
-  "ream\022K\n\007Control\022\022.cams.api.hub.None\032&.ca"
-  "ms.api.hub.DownstreamControlRequest\"\000(\0010"
-  "\001\022I\n\013MediaUpload\022\".cams.api.hub.Downstre"
-  "amMediaFrame\032\022.cams.api.hub.None\"\000(\0012L\n\t"
-  "Registrar\022\?\n\010Register\022\035.cams.api.hub.Reg"
-  "isterRequest\032\022.cams.api.hub.None\"\0002|\n\006Vi"
-  "ewer\0227\n\004Play\022\031.cams.api.hub.PlayRequest\032"
-  "\022.cams.api.hub.None\"\000\0229\n\005Pause\022\032.cams.ap"
-  "i.hub.PauseRequest\032\022.cams.api.hub.None\"\000"
-  "B\016Z\014../api/pb;pbb\006proto3"
+  "STREAM_MEDIA_FRAME_TYPE_SDP\020\0032Y\n\nControl"
+  "ler\022K\n\007Control\022\022.cams.api.hub.None\032&.cam"
+  "s.api.hub.DownstreamControlRequest\"\000(\0010\001"
+  "2U\n\010Uploader\022I\n\013MediaUpload\022\".cams.api.h"
+  "ub.DownstreamMediaFrame\032\022.cams.api.hub.N"
+  "one\"\000(\0012L\n\tRegistrar\022\?\n\010Register\022\035.cams."
+  "api.hub.RegisterRequest\032\022.cams.api.hub.N"
+  "one\"\0002|\n\006Viewer\0227\n\004Play\022\031.cams.api.hub.P"
+  "layRequest\032\022.cams.api.hub.None\"\000\0229\n\005Paus"
+  "e\022\032.cams.api.hub.PauseRequest\032\022.cams.api"
+  ".hub.None\"\000B\016Z\014../api/pb;pbb\006proto3"
   ;
 static ::_pbi::once_flag descriptor_table_hub_2eproto_once;
 const ::_pbi::DescriptorTable descriptor_table_hub_2eproto = {
-    false, false, 1184, descriptor_table_protodef_hub_2eproto,
+    false, false, 1195, descriptor_table_protodef_hub_2eproto,
     "hub.proto",
     &descriptor_table_hub_2eproto_once, nullptr, 0, 8,
     schemas, file_default_instances, TableStruct_hub_2eproto::offsets,

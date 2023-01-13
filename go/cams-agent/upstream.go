@@ -123,7 +123,7 @@ func (us *upstreamAgent) onCommand(cmd upstreamCommand) error {
 func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) error {
 	utils2.Logger.Trace().Str("action", "start").Msg("up ctrl")
 
-	client := pb2.NewDownstreamClient(cnx)
+	client := pb2.NewControllerClient(cnx)
 
 	ctx = metadata.AppendToOutgoingContext(ctx,
 		utils2.KeyUser, us.cfg.User)

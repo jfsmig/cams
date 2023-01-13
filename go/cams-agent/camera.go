@@ -152,7 +152,7 @@ func (cam *Camera) runStream(ctx context.Context) {
 }
 
 func (cam *Camera) runStreamOnce(ctx context.Context) error {
-	var ctrl pb2.Downstream_MediaUploadClient
+	var ctrl pb2.Uploader_MediaUploadClient
 	var sourceUrl *url.URL
 	var err error
 
@@ -181,7 +181,7 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	}
 	defer cnx.Close()
 
-	client := pb2.NewDownstreamClient(cnx)
+	client := pb2.NewUploaderClient(cnx)
 	ctx = metadata.AppendToOutgoingContext(ctx,
 		utils2.KeyUser, cam.agent.Config.User,
 		utils2.KeyStream, cam.PK())

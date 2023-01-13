@@ -30,11 +30,11 @@ namespace api {
 namespace hub {
 
 // The service dedicated to the agents
-// It is all about producing / uploading media streams
-class Downstream final {
+// It is all about controlling media streams
+class Controller final {
  public:
   static constexpr char const* service_full_name() {
-    return "cams.api.hub.Downstream";
+    return "cams.api.hub.Controller";
   }
   class StubInterface {
    public:
@@ -49,27 +49,11 @@ class Downstream final {
     std::unique_ptr< ::grpc::ClientAsyncReaderWriterInterface< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>> PrepareAsyncControl(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncReaderWriterInterface< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>>(PrepareAsyncControlRaw(context, cq));
     }
-    // Stream of media frames from the client to the server
-    // There should be at most one long-standing call to MediaUpload per agent connected
-    // to the cloud.
-    std::unique_ptr< ::grpc::ClientWriterInterface< ::cams::api::hub::DownstreamMediaFrame>> MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response) {
-      return std::unique_ptr< ::grpc::ClientWriterInterface< ::cams::api::hub::DownstreamMediaFrame>>(MediaUploadRaw(context, response));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>> AsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) {
-      return std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>>(AsyncMediaUploadRaw(context, response, cq, tag));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>> PrepareAsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>>(PrepareAsyncMediaUploadRaw(context, response, cq));
-    }
     class async_interface {
      public:
       virtual ~async_interface() {}
       // Stream of commands from the server to the client
       virtual void Control(::grpc::ClientContext* context, ::grpc::ClientBidiReactor< ::cams::api::hub::None,::cams::api::hub::DownstreamControlRequest>* reactor) = 0;
-      // Stream of media frames from the client to the server
-      // There should be at most one long-standing call to MediaUpload per agent connected
-      // to the cloud.
-      virtual void MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::ClientWriteReactor< ::cams::api::hub::DownstreamMediaFrame>* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -78,9 +62,6 @@ class Downstream final {
     virtual ::grpc::ClientReaderWriterInterface< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* ControlRaw(::grpc::ClientContext* context) = 0;
     virtual ::grpc::ClientAsyncReaderWriterInterface< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* AsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq, void* tag) = 0;
     virtual ::grpc::ClientAsyncReaderWriterInterface< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* PrepareAsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientWriterInterface< ::cams::api::hub::DownstreamMediaFrame>* MediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response) = 0;
-    virtual ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>* AsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) = 0;
-    virtual ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>* PrepareAsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -94,20 +75,10 @@ class Downstream final {
     std::unique_ptr<  ::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>> PrepareAsyncControl(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>>(PrepareAsyncControlRaw(context, cq));
     }
-    std::unique_ptr< ::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>> MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response) {
-      return std::unique_ptr< ::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>>(MediaUploadRaw(context, response));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>> AsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) {
-      return std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>>(AsyncMediaUploadRaw(context, response, cq, tag));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>> PrepareAsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>>(PrepareAsyncMediaUploadRaw(context, response, cq));
-    }
     class async final :
       public StubInterface::async_interface {
      public:
       void Control(::grpc::ClientContext* context, ::grpc::ClientBidiReactor< ::cams::api::hub::None,::cams::api::hub::DownstreamControlRequest>* reactor) override;
-      void MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::ClientWriteReactor< ::cams::api::hub::DownstreamMediaFrame>* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -122,11 +93,7 @@ class Downstream final {
     ::grpc::ClientReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* ControlRaw(::grpc::ClientContext* context) override;
     ::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* AsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq, void* tag) override;
     ::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* PrepareAsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>* MediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response) override;
-    ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* AsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) override;
-    ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* PrepareAsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_Control_;
-    const ::grpc::internal::RpcMethod rpcmethod_MediaUpload_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -136,10 +103,6 @@ class Downstream final {
     virtual ~Service();
     // Stream of commands from the server to the client
     virtual ::grpc::Status Control(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::cams::api::hub::DownstreamControlRequest, ::cams::api::hub::None>* stream);
-    // Stream of media frames from the client to the server
-    // There should be at most one long-standing call to MediaUpload per agent connected
-    // to the cloud.
-    virtual ::grpc::Status MediaUpload(::grpc::ServerContext* context, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* reader, ::cams::api::hub::None* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_Control : public BaseClass {
@@ -161,27 +124,7 @@ class Downstream final {
       ::grpc::Service::RequestAsyncBidiStreaming(0, context, stream, new_call_cq, notification_cq, tag);
     }
   };
-  template <class BaseClass>
-  class WithAsyncMethod_MediaUpload : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_MediaUpload() {
-      ::grpc::Service::MarkMethodAsync(1);
-    }
-    ~WithAsyncMethod_MediaUpload() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestMediaUpload(::grpc::ServerContext* context, ::grpc::ServerAsyncReader< ::cams::api::hub::None, ::cams::api::hub::DownstreamMediaFrame>* reader, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncClientStreaming(1, context, reader, new_call_cq, notification_cq, tag);
-    }
-  };
-  typedef WithAsyncMethod_Control<WithAsyncMethod_MediaUpload<Service > > AsyncService;
+  typedef WithAsyncMethod_Control<Service > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_Control : public BaseClass {
    private:
@@ -205,29 +148,7 @@ class Downstream final {
       ::grpc::CallbackServerContext* /*context*/)
       { return nullptr; }
   };
-  template <class BaseClass>
-  class WithCallbackMethod_MediaUpload : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_MediaUpload() {
-      ::grpc::Service::MarkMethodCallback(1,
-          new ::grpc::internal::CallbackClientStreamingHandler< ::cams::api::hub::DownstreamMediaFrame, ::cams::api::hub::None>(
-            [this](
-                   ::grpc::CallbackServerContext* context, ::cams::api::hub::None* response) { return this->MediaUpload(context, response); }));
-    }
-    ~WithCallbackMethod_MediaUpload() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerReadReactor< ::cams::api::hub::DownstreamMediaFrame>* MediaUpload(
-      ::grpc::CallbackServerContext* /*context*/, ::cams::api::hub::None* /*response*/)  { return nullptr; }
-  };
-  typedef WithCallbackMethod_Control<WithCallbackMethod_MediaUpload<Service > > CallbackService;
+  typedef WithCallbackMethod_Control<Service > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_Control : public BaseClass {
@@ -242,23 +163,6 @@ class Downstream final {
     }
     // disable synchronous version of this method
     ::grpc::Status Control(::grpc::ServerContext* /*context*/, ::grpc::ServerReaderWriter< ::cams::api::hub::DownstreamControlRequest, ::cams::api::hub::None>* /*stream*/)  override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
-  class WithGenericMethod_MediaUpload : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_MediaUpload() {
-      ::grpc::Service::MarkMethodGeneric(1);
-    }
-    ~WithGenericMethod_MediaUpload() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -284,26 +188,6 @@ class Downstream final {
     }
   };
   template <class BaseClass>
-  class WithRawMethod_MediaUpload : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_MediaUpload() {
-      ::grpc::Service::MarkMethodRaw(1);
-    }
-    ~WithRawMethod_MediaUpload() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestMediaUpload(::grpc::ServerContext* context, ::grpc::ServerAsyncReader< ::grpc::ByteBuffer, ::grpc::ByteBuffer>* reader, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncClientStreaming(1, context, reader, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
   class WithRawCallbackMethod_Control : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
@@ -326,13 +210,181 @@ class Downstream final {
       ::grpc::CallbackServerContext* /*context*/)
       { return nullptr; }
   };
+  typedef Service StreamedUnaryService;
+  typedef Service SplitStreamedService;
+  typedef Service StreamedService;
+};
+
+// The service dedicated to the agents 
+// It is all about their cameras producing media frames
+class Uploader final {
+ public:
+  static constexpr char const* service_full_name() {
+    return "cams.api.hub.Uploader";
+  }
+  class StubInterface {
+   public:
+    virtual ~StubInterface() {}
+    // Stream of media frames from the client to the server
+    // There should be at most one long-standing call to MediaUpload per agent connected
+    // to the cloud.
+    std::unique_ptr< ::grpc::ClientWriterInterface< ::cams::api::hub::DownstreamMediaFrame>> MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response) {
+      return std::unique_ptr< ::grpc::ClientWriterInterface< ::cams::api::hub::DownstreamMediaFrame>>(MediaUploadRaw(context, response));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>> AsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>>(AsyncMediaUploadRaw(context, response, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>> PrepareAsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>>(PrepareAsyncMediaUploadRaw(context, response, cq));
+    }
+    class async_interface {
+     public:
+      virtual ~async_interface() {}
+      // Stream of media frames from the client to the server
+      // There should be at most one long-standing call to MediaUpload per agent connected
+      // to the cloud.
+      virtual void MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::ClientWriteReactor< ::cams::api::hub::DownstreamMediaFrame>* reactor) = 0;
+    };
+    typedef class async_interface experimental_async_interface;
+    virtual class async_interface* async() { return nullptr; }
+    class async_interface* experimental_async() { return async(); }
+   private:
+    virtual ::grpc::ClientWriterInterface< ::cams::api::hub::DownstreamMediaFrame>* MediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response) = 0;
+    virtual ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>* AsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) = 0;
+    virtual ::grpc::ClientAsyncWriterInterface< ::cams::api::hub::DownstreamMediaFrame>* PrepareAsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) = 0;
+  };
+  class Stub final : public StubInterface {
+   public:
+    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
+    std::unique_ptr< ::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>> MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response) {
+      return std::unique_ptr< ::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>>(MediaUploadRaw(context, response));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>> AsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) {
+      return std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>>(AsyncMediaUploadRaw(context, response, cq, tag));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>> PrepareAsyncMediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>>(PrepareAsyncMediaUploadRaw(context, response, cq));
+    }
+    class async final :
+      public StubInterface::async_interface {
+     public:
+      void MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::ClientWriteReactor< ::cams::api::hub::DownstreamMediaFrame>* reactor) override;
+     private:
+      friend class Stub;
+      explicit async(Stub* stub): stub_(stub) { }
+      Stub* stub() { return stub_; }
+      Stub* stub_;
+    };
+    class async* async() override { return &async_stub_; }
+
+   private:
+    std::shared_ptr< ::grpc::ChannelInterface> channel_;
+    class async async_stub_{this};
+    ::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>* MediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response) override;
+    ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* AsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) override;
+    ::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* PrepareAsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) override;
+    const ::grpc::internal::RpcMethod rpcmethod_MediaUpload_;
+  };
+  static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
+
+  class Service : public ::grpc::Service {
+   public:
+    Service();
+    virtual ~Service();
+    // Stream of media frames from the client to the server
+    // There should be at most one long-standing call to MediaUpload per agent connected
+    // to the cloud.
+    virtual ::grpc::Status MediaUpload(::grpc::ServerContext* context, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* reader, ::cams::api::hub::None* response);
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_MediaUpload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_MediaUpload() {
+      ::grpc::Service::MarkMethodAsync(0);
+    }
+    ~WithAsyncMethod_MediaUpload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestMediaUpload(::grpc::ServerContext* context, ::grpc::ServerAsyncReader< ::cams::api::hub::None, ::cams::api::hub::DownstreamMediaFrame>* reader, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncClientStreaming(0, context, reader, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_MediaUpload<Service > AsyncService;
+  template <class BaseClass>
+  class WithCallbackMethod_MediaUpload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_MediaUpload() {
+      ::grpc::Service::MarkMethodCallback(0,
+          new ::grpc::internal::CallbackClientStreamingHandler< ::cams::api::hub::DownstreamMediaFrame, ::cams::api::hub::None>(
+            [this](
+                   ::grpc::CallbackServerContext* context, ::cams::api::hub::None* response) { return this->MediaUpload(context, response); }));
+    }
+    ~WithCallbackMethod_MediaUpload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerReadReactor< ::cams::api::hub::DownstreamMediaFrame>* MediaUpload(
+      ::grpc::CallbackServerContext* /*context*/, ::cams::api::hub::None* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_MediaUpload<Service > CallbackService;
+  typedef CallbackService ExperimentalCallbackService;
+  template <class BaseClass>
+  class WithGenericMethod_MediaUpload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_MediaUpload() {
+      ::grpc::Service::MarkMethodGeneric(0);
+    }
+    ~WithGenericMethod_MediaUpload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_MediaUpload : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_MediaUpload() {
+      ::grpc::Service::MarkMethodRaw(0);
+    }
+    ~WithRawMethod_MediaUpload() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status MediaUpload(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* /*reader*/, ::cams::api::hub::None* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestMediaUpload(::grpc::ServerContext* context, ::grpc::ServerAsyncReader< ::grpc::ByteBuffer, ::grpc::ByteBuffer>* reader, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncClientStreaming(0, context, reader, new_call_cq, notification_cq, tag);
+    }
+  };
   template <class BaseClass>
   class WithRawCallbackMethod_MediaUpload : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_MediaUpload() {
-      ::grpc::Service::MarkMethodRawCallback(1,
+      ::grpc::Service::MarkMethodRawCallback(0,
           new ::grpc::internal::CallbackClientStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, ::grpc::ByteBuffer* response) { return this->MediaUpload(context, response); }));
@@ -353,7 +405,8 @@ class Downstream final {
   typedef Service StreamedService;
 };
 
-// The service used for authentication and provisioning
+// The service is dedicated to the agents
+// It is used for authentication and registration of their cameras
 class Registrar final {
  public:
   static constexpr char const* service_full_name() {
@@ -561,7 +614,8 @@ class Registrar final {
   typedef WithStreamedUnaryMethod_Register<Service > StreamedService;
 };
 
-// The service used for authentication and provisioning
+// The service is dedicated to admins
+// It pilots the agents on the field from the cloud
 class Viewer final {
  public:
   static constexpr char const* service_full_name() {

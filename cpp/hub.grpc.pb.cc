@@ -23,70 +23,95 @@ namespace cams {
 namespace api {
 namespace hub {
 
-static const char* Downstream_method_names[] = {
-  "/cams.api.hub.Downstream/Control",
-  "/cams.api.hub.Downstream/MediaUpload",
+static const char* Controller_method_names[] = {
+  "/cams.api.hub.Controller/Control",
 };
 
-std::unique_ptr< Downstream::Stub> Downstream::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
+std::unique_ptr< Controller::Stub> Controller::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
   (void)options;
-  std::unique_ptr< Downstream::Stub> stub(new Downstream::Stub(channel, options));
+  std::unique_ptr< Controller::Stub> stub(new Controller::Stub(channel, options));
   return stub;
 }
 
-Downstream::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
-  : channel_(channel), rpcmethod_Control_(Downstream_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::BIDI_STREAMING, channel)
-  , rpcmethod_MediaUpload_(Downstream_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::CLIENT_STREAMING, channel)
+Controller::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
+  : channel_(channel), rpcmethod_Control_(Controller_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::BIDI_STREAMING, channel)
   {}
 
-::grpc::ClientReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* Downstream::Stub::ControlRaw(::grpc::ClientContext* context) {
+::grpc::ClientReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* Controller::Stub::ControlRaw(::grpc::ClientContext* context) {
   return ::grpc::internal::ClientReaderWriterFactory< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>::Create(channel_.get(), rpcmethod_Control_, context);
 }
 
-void Downstream::Stub::async::Control(::grpc::ClientContext* context, ::grpc::ClientBidiReactor< ::cams::api::hub::None,::cams::api::hub::DownstreamControlRequest>* reactor) {
+void Controller::Stub::async::Control(::grpc::ClientContext* context, ::grpc::ClientBidiReactor< ::cams::api::hub::None,::cams::api::hub::DownstreamControlRequest>* reactor) {
   ::grpc::internal::ClientCallbackReaderWriterFactory< ::cams::api::hub::None,::cams::api::hub::DownstreamControlRequest>::Create(stub_->channel_.get(), stub_->rpcmethod_Control_, context, reactor);
 }
 
-::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* Downstream::Stub::AsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq, void* tag) {
+::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* Controller::Stub::AsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq, void* tag) {
   return ::grpc::internal::ClientAsyncReaderWriterFactory< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>::Create(channel_.get(), cq, rpcmethod_Control_, context, true, tag);
 }
 
-::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* Downstream::Stub::PrepareAsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncReaderWriter< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>* Controller::Stub::PrepareAsyncControlRaw(::grpc::ClientContext* context, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncReaderWriterFactory< ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>::Create(channel_.get(), cq, rpcmethod_Control_, context, false, nullptr);
 }
 
-::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>* Downstream::Stub::MediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response) {
-  return ::grpc::internal::ClientWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(channel_.get(), rpcmethod_MediaUpload_, context, response);
-}
-
-void Downstream::Stub::async::MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::ClientWriteReactor< ::cams::api::hub::DownstreamMediaFrame>* reactor) {
-  ::grpc::internal::ClientCallbackWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(stub_->channel_.get(), stub_->rpcmethod_MediaUpload_, context, response, reactor);
-}
-
-::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* Downstream::Stub::AsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) {
-  return ::grpc::internal::ClientAsyncWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(channel_.get(), cq, rpcmethod_MediaUpload_, context, response, true, tag);
-}
-
-::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* Downstream::Stub::PrepareAsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(channel_.get(), cq, rpcmethod_MediaUpload_, context, response, false, nullptr);
-}
-
-Downstream::Service::Service() {
+Controller::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      Downstream_method_names[0],
+      Controller_method_names[0],
       ::grpc::internal::RpcMethod::BIDI_STREAMING,
-      new ::grpc::internal::BidiStreamingHandler< Downstream::Service, ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>(
-          [](Downstream::Service* service,
+      new ::grpc::internal::BidiStreamingHandler< Controller::Service, ::cams::api::hub::None, ::cams::api::hub::DownstreamControlRequest>(
+          [](Controller::Service* service,
              ::grpc::ServerContext* ctx,
              ::grpc::ServerReaderWriter<::cams::api::hub::DownstreamControlRequest,
              ::cams::api::hub::None>* stream) {
                return service->Control(ctx, stream);
              }, this)));
+}
+
+Controller::Service::~Service() {
+}
+
+::grpc::Status Controller::Service::Control(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::cams::api::hub::DownstreamControlRequest, ::cams::api::hub::None>* stream) {
+  (void) context;
+  (void) stream;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+
+static const char* Uploader_method_names[] = {
+  "/cams.api.hub.Uploader/MediaUpload",
+};
+
+std::unique_ptr< Uploader::Stub> Uploader::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
+  (void)options;
+  std::unique_ptr< Uploader::Stub> stub(new Uploader::Stub(channel, options));
+  return stub;
+}
+
+Uploader::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
+  : channel_(channel), rpcmethod_MediaUpload_(Uploader_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::CLIENT_STREAMING, channel)
+  {}
+
+::grpc::ClientWriter< ::cams::api::hub::DownstreamMediaFrame>* Uploader::Stub::MediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response) {
+  return ::grpc::internal::ClientWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(channel_.get(), rpcmethod_MediaUpload_, context, response);
+}
+
+void Uploader::Stub::async::MediaUpload(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::ClientWriteReactor< ::cams::api::hub::DownstreamMediaFrame>* reactor) {
+  ::grpc::internal::ClientCallbackWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(stub_->channel_.get(), stub_->rpcmethod_MediaUpload_, context, response, reactor);
+}
+
+::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* Uploader::Stub::AsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq, void* tag) {
+  return ::grpc::internal::ClientAsyncWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(channel_.get(), cq, rpcmethod_MediaUpload_, context, response, true, tag);
+}
+
+::grpc::ClientAsyncWriter< ::cams::api::hub::DownstreamMediaFrame>* Uploader::Stub::PrepareAsyncMediaUploadRaw(::grpc::ClientContext* context, ::cams::api::hub::None* response, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncWriterFactory< ::cams::api::hub::DownstreamMediaFrame>::Create(channel_.get(), cq, rpcmethod_MediaUpload_, context, response, false, nullptr);
+}
+
+Uploader::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      Downstream_method_names[1],
+      Uploader_method_names[0],
       ::grpc::internal::RpcMethod::CLIENT_STREAMING,
-      new ::grpc::internal::ClientStreamingHandler< Downstream::Service, ::cams::api::hub::DownstreamMediaFrame, ::cams::api::hub::None>(
-          [](Downstream::Service* service,
+      new ::grpc::internal::ClientStreamingHandler< Uploader::Service, ::cams::api::hub::DownstreamMediaFrame, ::cams::api::hub::None>(
+          [](Uploader::Service* service,
              ::grpc::ServerContext* ctx,
              ::grpc::ServerReader<::cams::api::hub::DownstreamMediaFrame>* reader,
              ::cams::api::hub::None* resp) {
@@ -94,16 +119,10 @@ Downstream::Service::Service() {
              }, this)));
 }
 
-Downstream::Service::~Service() {
+Uploader::Service::~Service() {
 }
 
-::grpc::Status Downstream::Service::Control(::grpc::ServerContext* context, ::grpc::ServerReaderWriter< ::cams::api::hub::DownstreamControlRequest, ::cams::api::hub::None>* stream) {
-  (void) context;
-  (void) stream;
-  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-}
-
-::grpc::Status Downstream::Service::MediaUpload(::grpc::ServerContext* context, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* reader, ::cams::api::hub::None* response) {
+::grpc::Status Uploader::Service::MediaUpload(::grpc::ServerContext* context, ::grpc::ServerReader< ::cams::api::hub::DownstreamMediaFrame>* reader, ::cams::api::hub::None* response) {
   (void) context;
   (void) reader;
   (void) response;

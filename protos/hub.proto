@@ -17,15 +17,10 @@ message StreamId {
 message None {}
 
 // The service dedicated to the agents
-// It is all about producing / uploading media streams
-service Downstream {
+// It is all about controlling media streams
+service Controller {
   // Stream of commands from the server to the client
   rpc Control(stream None) returns (stream DownstreamControlRequest) {}
-
-  // Stream of media frames from the client to the server
-  // There should be at most one long-standing call to MediaUpload per agent connected
-  // to the cloud.
-  rpc MediaUpload(stream DownstreamMediaFrame) returns (None) {}
 }
 
 enum DownstreamCommandType {
@@ -40,6 +35,16 @@ message DownstreamControlRequest {
   DownstreamCommandType command = 2;
 }
 
+
+// The service dedicated to the agents 
+// It is all about their cameras producing media frames
+service Uploader {
+  // Stream of media frames from the client to the server
+  // There should be at most one long-standing call to MediaUpload per agent connected
+  // to the cloud.
+  rpc MediaUpload(stream DownstreamMediaFrame) returns (None) {}
+}
+
 enum DownstreamMediaFrameType {
   DOWNSTREAM_MEDIA_FRAME_TYPE_UNSPECIFIED = 0;
   DOWNSTREAM_MEDIA_FRAME_TYPE_RTP = 1;
@@ -52,7 +57,8 @@ message DownstreamMediaFrame {
   bytes payload = 3;
 }
 
-// The service used for authentication and provisioning
+// The service is dedicated to the agents
+// It is used for authentication and registration of their cameras
 service Registrar {
   rpc Register(RegisterRequest) returns (None) {}
 }
@@ -61,7 +67,8 @@ message RegisterRequest {
   StreamId id = 1;
 }
 
-// The service used for authentication and provisioning
+// The service is dedicated to admins
+// It pilots the agents on the field from the cloud
 service Viewer {
   rpc Play(PlayRequest) returns (None) {}
   rpc Pause(PauseRequest) returns (None) {}
