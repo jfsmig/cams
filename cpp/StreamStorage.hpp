@@ -15,13 +15,11 @@ public:
 
     StreamStorage() = delete;
 
-    StreamStorage(const std::string &user, const std::string &camera) {
+    StreamStorage(const std::string &user, const std::string &camera);
 
-    }
+    bool on_fragment(const char *buf, size_t len);
 
-    void on_fragment(const char *buf, size_t len) {
-
-    }
+private:
 };
 
 

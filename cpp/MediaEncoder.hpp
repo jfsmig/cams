@@ -16,13 +16,9 @@ public:
 
     MediaEncoder() = delete;
 
-    MediaEncoder(StreamStorage &storage) : storage_{storage} {
+    MediaEncoder(StreamStorage &storage);
 
-    }
-
-    void on_frame(const char *buf, size_t len) {
-
-    }
+    bool on_frame(const char *buf, size_t len);
 
 private:
     StreamStorage &storage_;
