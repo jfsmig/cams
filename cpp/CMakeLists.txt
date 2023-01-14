@@ -40,7 +40,7 @@ add_executable(cams-rtp-to-hls
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.cc"
         main.cpp
-        fmp4.cpp)
+        fmp4.cpp MediaService.cpp MediaService.hpp MediaDecoder.cpp MediaDecoder.hpp MediaEncoder.cpp MediaEncoder.hpp StreamStorage.cpp StreamStorage.hpp Uncopyable.hpp)
 
 target_compile_options(cams-rtp-to-hls PUBLIC
         -g -pipe -Wall -Wextra
