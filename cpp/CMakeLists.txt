@@ -34,40 +34,45 @@ add_custom_command(
       DEPENDS "${CMAKE_SOURCE_DIR}/../protos/hub.proto"
       COMMAND_EXPAND_LISTS)
 
-add_executable(cams-rtp-to-hls
-        "${CMAKE_CURRENT_SOURCE_DIR}/hub.pb.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/hub.pb.cc"
-        "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.h"
-        "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.cc"
-        main.cpp
-        MediaService.cpp MediaService.hpp
-        MediaDecoder.cpp MediaDecoder.hpp
-        MediaEncoder.cpp MediaEncoder.hpp
-        StreamStorage.cpp StreamStorage.hpp
-        Uncopyable.hpp)
+add_library(alldeps INTERFACE)
 
-target_compile_options(cams-rtp-to-hls PUBLIC
-        -g -pipe -Wall -Wextra
-        $<$<CONFIG:DEBUG>:-Og -fno-inline>
-        $<$<CONFIG:RELEASE>:-O2>)
-
-target_include_directories(cams-rtp-to-hls PUBLIC
+target_include_directories(alldeps INTERFACE
         ${LIBAV_INCLUDE_DIRS}
         ${GRPCPP_INCLUDE_DIRS}
-        ${PROTOBUF_INCLUDE_DIRS}
-)
+        ${PROTOBUF_INCLUDE_DIRS})
 
-target_link_directories(cams-rtp-to-hls PUBLIC
+target_link_directories(alldeps INTERFACE
         ${LIBAV_LIBRARY_DIRS}
         ${GRPCPP_LIBRARY_DIRS}
-        ${PROTOBUF_LIBRARY_DIRS}
-)
+        ${PROTOBUF_LIBRARY_DIRS})
 
-target_link_libraries(cams-rtp-to-hls
+target_link_libraries(alldeps INTERFACE
         ${GRPCPP_LIBRARIES}
         ${GRPCPP_STATIC_LIBRARIES}
         ${PROTOBUF_LIBRARIES}
         ${PROTOBUF_STATIC_LIBRARIES}
         ${LIBAV_LIBRARIES}
-        ${LIBAV_STATIC_LIBRARIES}
-)
+        ${LIBAV_STATIC_LIBRARIES})
+
+target_compile_options(alldeps INTERFACE
+        -g -pipe -Wall -Wextra
+        $<$<CONFIG:DEBUG>:-Og -fno-inline>
+        $<$<CONFIG:RELEASE>:-O2>)
+
+add_library(baselib OBJECT
+        "${CMAKE_CURRENT_SOURCE_DIR}/hub.pb.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/hub.pb.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.cc"
+        MediaService.cpp MediaService.hpp
+        MediaDecoder.cpp MediaDecoder.hpp
+        MediaEncoder.cpp MediaEncoder.hpp
+        StreamStorage.cpp StreamStorage.hpp
+        Uncopyable.hpp)
+target_link_libraries(baselib PUBLIC alldeps)
+
+add_executable(cams-rtp-to-hls main.cpp)
+target_link_libraries(cams-rtp-to-hls alldeps baselib)
+
+add_executable(test-av test_av.cpp)
+target_link_libraries(test-av alldeps baselib)

@@ -35,7 +35,7 @@ static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
             goto label_retry;
         case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_RTP:
             assert(buf_size > 0);
-            if (frame.payload().size() > (size_t)buf_size) {
+            if (frame.payload().size() > (size_t) buf_size) {
                 // TODO(jfs) log
                 return -1;
             }
@@ -74,6 +74,9 @@ MediaDecoder::MediaDecoder(const std::string_view sdp, MediaEncoder &encoder) : 
 
     input_format_context->pb = avio_input_context_;
     input_format_context->flags |= AVFMT_FLAG_CUSTOM_IO;
+
+    rc = avformat_open_input(&input_format_context, "/dev/null", input_format, nullptr);
+    assert(rc == 0);
 }
 
 MediaDecoder::~MediaDecoder() {
