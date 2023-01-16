@@ -64,15 +64,18 @@ add_library(baselib OBJECT
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.pb.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.cc"
-        MediaService.cpp MediaService.hpp
+        MediaSource.hpp
         MediaDecoder.cpp MediaDecoder.hpp
         MediaEncoder.cpp MediaEncoder.hpp
         StreamStorage.cpp StreamStorage.hpp
         Uncopyable.hpp)
 target_link_libraries(baselib PUBLIC alldeps)
 
-add_executable(cams-rtp-to-hls main.cpp)
+add_executable(cams-rtp-to-hls
+        MediaService.cpp MediaService.hpp
+        main.cpp)
 target_link_libraries(cams-rtp-to-hls alldeps baselib)
 
-add_executable(test-av test_av.cpp)
+add_executable(test-av
+        test_av.cpp)
 target_link_libraries(test-av alldeps baselib)

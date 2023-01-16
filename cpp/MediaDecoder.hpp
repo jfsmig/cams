@@ -15,13 +15,14 @@ extern "C" {
 }
 
 #include "Uncopyable.hpp"
+#include "MediaSource.hpp"
 #include "MediaEncoder.hpp"
 
 class MediaDecoder : Uncopyable {
 public:
     MediaDecoder() = delete;
 
-    MediaDecoder(const std::string_view sdp, MediaEncoder &encoder);
+    MediaDecoder(const std::string_view sdp, MediaSource &source, MediaEncoder &encoder);
 
     ~MediaDecoder();
 
@@ -30,14 +31,17 @@ public:
     bool on_rtcp(const char *buf, size_t len);
 
 private:
+    // Input
+    MediaSource &source_;
+
     // Output
     MediaEncoder &encoder_;
 
     AVInputFormat *input_format = nullptr;
     AVFormatContext *input_format_context = nullptr;
     AVDictionary *input_format_opts = nullptr;
-    std::array<uint8_t, 8192> readbuf_;
     AVIOContext * avio_input_context_ = nullptr;
+    std::array<uint8_t, 8192> readbuf_;
 };
 
 
