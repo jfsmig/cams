@@ -1,21 +1,19 @@
 // Copyright (c) 2022-2022 Jean-Francois SMIGIELSKI
 
-package main
+package camera
 
 import (
 	"context"
-	pb2 "github.com/jfsmig/cams/go/api/pb"
-	utils2 "github.com/jfsmig/cams/go/utils"
-	"github.com/rs/zerolog"
-	"google.golang.org/grpc/metadata"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/aler9/gortsplib"
 	"github.com/aler9/gortsplib/pkg/url"
+	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
+	"github.com/rs/zerolog"
 )
 
 type CamAgentState uint32
@@ -46,7 +44,7 @@ const (
 
 // We assume only one stream per camera.
 type Camera struct {
-	agent *Agent
+	open UploadOpenFunc
 
 	ID            string
 	generation    uint32
@@ -58,13 +56,13 @@ type Camera struct {
 
 	requests chan CamCommand
 
-	group utils2.Swarm
+	group utils.Swarm
 }
 
-func NewCamera(agent *Agent, appliance sdk.Appliance) *Camera {
+func NewCamera(open UploadOpenFunc, appliance sdk.Appliance) *Camera {
 	transport := gortsplib.TransportUDP
 	return &Camera{
-		agent:       agent,
+		open:        open,
 		ID:          appliance.GetUUID(),
 		generation:  0,
 		onvifClient: appliance,
@@ -80,9 +78,9 @@ func NewCamera(agent *Agent, appliance sdk.Appliance) *Camera {
 	}
 }
 
-func runCam(cam *Camera) utils2.SwarmFunc {
-	return func(ctx context.Context) { cam.Run(ctx) }
-}
+func (cam *Camera) GetGeneration() uint32 { return cam.generation }
+
+func (cam *Camera) SetGeneration(gen uint32) { cam.generation = gen }
 
 func (cam *Camera) Run(ctx context.Context) {
 	if !cam.singletonLock.TryLock() {
@@ -130,11 +128,11 @@ func (cam *Camera) PlayStream() { cam.requests <- CamCommandPlay }
 func (cam *Camera) StopStream() { cam.requests <- CamCommandPause }
 
 func (cam *Camera) warn(err error) *zerolog.Event {
-	return utils2.Logger.Warn().Str("url", cam.ID).Err(err)
+	return utils.Logger.Warn().Str("url", cam.ID).Err(err)
 }
 
 func (cam *Camera) debug() *zerolog.Event {
-	return utils2.Logger.Trace().Str("url", cam.ID)
+	return utils.Logger.Trace().Str("url", cam.ID)
 }
 
 func (cam *Camera) runStream(ctx context.Context) {
@@ -152,7 +150,6 @@ func (cam *Camera) runStream(ctx context.Context) {
 }
 
 func (cam *Camera) runStreamOnce(ctx context.Context) error {
-	var ctrl pb2.Uploader_MediaUploadClient
 	var sourceUrl *url.URL
 	var err error
 
@@ -175,20 +172,11 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	}
 
 	// Prepare the upstream side
-	cnx, err := utils2.DialInsecure(ctx, cam.agent.Config.UpstreamMedia.Address)
+	upload, err := cam.open(ctx)
 	if err != nil {
 		return errors.Annotate(err, "dial")
 	}
-	defer cnx.Close()
-
-	client := pb2.NewUploaderClient(cnx)
-	ctx = metadata.AppendToOutgoingContext(ctx,
-		utils2.KeyUser, cam.agent.Config.User,
-		utils2.KeyStream, cam.PK())
-	ctrl, err = client.MediaUpload(ctx)
-	if err != nil {
-		return errors.Annotate(err, "open")
-	}
+	defer upload.Close()
 
 	// We need a way to break the current goroutine that is just waiting for
 	// termination notifications on channels
@@ -205,16 +193,8 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 
 	cam.rtspClient.OnPacketRTP = func(pkt *gortsplib.ClientOnPacketRTPCtx) {
 		activityJiffies.Add(1)
-		b, err2 := pkt.Packet.Marshal()
-		if err2 == nil {
-			frame := &pb2.DownstreamMediaFrame{
-				Type:    pb2.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTP,
-				Payload: b,
-			}
-			err2 = ctrl.Send(frame)
-		}
-		if err2 != nil {
-			utils2.Logger.Warn().Str("action", "send").Err(err2).Msg("up media")
+		if err2 := upload.OnRTP(pkt); err2 != nil {
+			cam.warn(err2).Msg("rtp upload")
 			if !localStop.Swap(true) {
 				localError <- err2
 			}
@@ -223,32 +203,21 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 
 	cam.rtspClient.OnPacketRTCP = func(pkt *gortsplib.ClientOnPacketRTCPCtx) {
 		activityJiffies.Add(1)
-		b, err2 := pkt.Packet.Marshal()
-		if err2 == nil {
-			frame := &pb2.DownstreamMediaFrame{
-				Type:    pb2.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP,
-				Payload: b,
-			}
-			err2 = ctrl.Send(frame)
-		}
-		if err2 != nil {
-			utils2.Logger.Warn().Str("action", "send").Err(err2).Msg("up media")
+		if err2 := upload.OnRTCP(pkt); err2 != nil {
+			cam.warn(err2).Msg("rtcp upload")
 			if !localStop.Swap(true) {
 				localError <- err2
 			}
 		}
 	}
 
-	frame := &pb2.DownstreamMediaFrame{
-		Type:    pb2.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_SDP,
-		Payload: sdpResp.Body,
-	}
-	if err = ctrl.Send(frame); err != nil {
+	if err = upload.OnSDP(sdpResp.Body); err != nil {
 		return errors.Annotate(err, "send sdp banner")
 	}
 
 	// Spawn goroutines that will consume the camera stream
 	err = cam.rtspClient.SetupAndPlay(tracks[0:1], trackUrl)
+	defer cam.rtspClient.Pause()
 	if err != nil {
 		return errors.Annotate(err, "setupAndPlay")
 	}
@@ -271,8 +240,16 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 }
 
 func (cam *Camera) queryMediaUrl(ctx context.Context) (*url.URL, error) {
+	profiles := cam.onvifClient.FetchProfiles(ctx)
+	cam.debug().Interface("profiles", profiles).Msg("profiles")
+	for k, _ := range profiles.Profiles {
+		streamURI := string(profiles.Profiles[k].Uris.Stream.Uri)
+		cam.debug().Str("token", string(k)).Str("stream", streamURI).Msg("STREAM")
+	}
+
 	streamURI := cam.onvifClient.FetchStreamURI(ctx)
 	sourceUrl, err := url.Parse(streamURI)
+	cam.debug().Interface("sourceUrl", sourceUrl).Str("streamUri", string(streamURI)).Msg("stream uri")
 	if err != nil {
 		return nil, errors.Annotate(err, "parse")
 	}
@@ -292,7 +269,7 @@ func (cam *Camera) onCmdPlay(ctx context.Context) {
 		fallthrough
 	case CamAgentIdle:
 		cam.State = CamAgentPlaying
-		cam.group = utils2.NewGroup(ctx)
+		cam.group = utils.NewGroup(ctx)
 		cam.group.Run(func(c context.Context) { cam.runStream(c) })
 		cam.debug().Msg("camera restarted")
 		fallthrough

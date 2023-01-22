@@ -37,7 +37,7 @@ private:
     // Output
     MediaEncoder &encoder_;
 
-    AVInputFormat *input_format = nullptr;
+    const AVInputFormat *input_format = nullptr;
     AVFormatContext *input_format_context = nullptr;
     AVDictionary *input_format_opts = nullptr;
     AVIOContext * avio_input_context_ = nullptr;

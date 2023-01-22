@@ -4,7 +4,8 @@ package main
 
 import (
 	"context"
-	utils2 "github.com/jfsmig/cams/go/utils"
+	"github.com/jfsmig/cams/go/camera"
+	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/go-bags"
 	"github.com/jfsmig/onvif/networking"
 	"github.com/jfsmig/onvif/sdk"
@@ -30,7 +31,7 @@ type Agent struct {
 	singletonLock sync.Mutex
 	dataLock      sync.Mutex
 
-	devices    bags.SortedObj[string, *Camera]
+	devices    bags.SortedObj[string, *camera.Camera]
 	interfaces bags.SortedObj[string, *Nic]
 
 	// Fields extracted from the configuration
@@ -38,8 +39,8 @@ type Agent struct {
 	interfacesStatic           []string
 	interfacesDiscoverPatterns []string
 
-	nicsGroup utils2.Swarm
-	camsSwarm utils2.Swarm
+	nicsGroup utils.Swarm
+	camsSwarm utils.Swarm
 }
 
 func NewLanAgent(cfg AgentConfig) *Agent {
@@ -47,7 +48,7 @@ func NewLanAgent(cfg AgentConfig) *Agent {
 		Config:     cfg,
 		httpClient: http.Client{},
 
-		devices:    make([]*Camera, 0),
+		devices:    make([]*camera.Camera, 0),
 		interfaces: make([]*Nic, 0),
 
 		interfacesDiscoverPatterns: []string{},
@@ -67,9 +68,9 @@ func NewLanAgent(cfg AgentConfig) *Agent {
 }
 
 // UpdateStreamExpectation implements a
-func (lan *Agent) UpdateStreamExpectation(camId string, cmd CamCommand) error {
+func (lan *Agent) UpdateStreamExpectation(camId string, cmd camera.CamCommand) error {
 	// Locate the camera
-	cam := func(camId string) *Camera {
+	cam := func(camId string) *camera.Camera {
 		lan.dataLock.Lock()
 		defer lan.dataLock.Unlock()
 		cam, _ := lan.devices.Get(camId)
@@ -81,13 +82,13 @@ func (lan *Agent) UpdateStreamExpectation(camId string, cmd CamCommand) error {
 	}
 
 	switch cmd {
-	case CamCommandPlay:
-		if cam.State == CamAgentOff {
+	case camera.CamCommandPlay:
+		if cam.State == camera.CamAgentOff {
 			lan.camsSwarm.Run(runCam(cam))
 		}
 		cam.PlayStream()
 		return nil
-	case CamCommandPause:
+	case camera.CamCommandPause:
 		cam.StopStream()
 		return nil
 	default:
@@ -101,20 +102,20 @@ func (lan *Agent) Run(ctx context.Context) {
 	}
 	defer lan.singletonLock.Unlock()
 
-	utils2.Logger.Info().Str("action", "start").Msg("lan")
+	utils.Logger.Info().Str("action", "start").Msg("lan")
 
 	// Cameras may come ang go, so a simple goroutine swarm if enough.
-	lan.camsSwarm = utils2.NewSwarm(ctx)
+	lan.camsSwarm = utils.NewSwarm(ctx)
 	defer lan.camsSwarm.Cancel()
 
 	// ... This is not the case for network interfaces that are rather stable.
-	lan.nicsGroup = utils2.NewGroup(ctx)
+	lan.nicsGroup = utils.NewGroup(ctx)
 	defer lan.nicsGroup.Cancel()
 
 	// Perform a first discovery of the local interfaces.
 	// No need to do it periodically, interfaces are unlikely plug & play
 	if err := lan.discoverNics(); err != nil {
-		utils2.Logger.Error().Err(err).Msg("disc")
+		utils.Logger.Error().Err(err).Msg("disc")
 		return
 	}
 
@@ -130,23 +131,23 @@ func (lan *Agent) Run(ctx context.Context) {
 
 	lan.nicsGroup.Run(func(c context.Context) { lan.runTimers(c) })
 
-	utils2.Logger.Info().Str("action", "wait nics").Msg("lan")
+	utils.Logger.Info().Str("action", "wait nics").Msg("lan")
 
 	// Wait for the discovery goroutines to stop, this will happen until a strong
 	// error condition occurs.
 	lan.nicsGroup.Wait()
 
-	utils2.Logger.Info().Str("action", "wait cams").Msg("lan")
+	utils.Logger.Info().Str("action", "wait cams").Msg("lan")
 
 	// Then ensure no camera goroutine is leaked running in the background
 	lan.camsSwarm.Cancel()
 	lan.camsSwarm.Wait()
 }
 
-func (lan *Agent) Cameras() []*Camera {
+func (lan *Agent) Cameras() []*camera.Camera {
 	lan.dataLock.Lock()
 	defer lan.dataLock.Unlock()
-	out := make([]*Camera, 0, len(lan.devices))
+	out := make([]*camera.Camera, 0, len(lan.devices))
 	for _, cam := range lan.devices {
 		out = append(out, cam)
 	}
@@ -160,14 +161,14 @@ func (lan *Agent) runTimers(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			utils2.Logger.Info().Str("action", "stop").Msg("lan")
+			utils.Logger.Info().Str("action", "stop").Msg("lan")
 			return
 		case <-nextScan:
 			lan.triggerRescanAsync(ctx)
 			nextScan = time.After(lan.Config.GetScanPeriod())
 		case <-nextCheck:
 			HttpClient.CloseIdleConnections()
-			utils2.Logger.Info().
+			utils.Logger.Info().
 				Str("action", "check").
 				Int("devices", len(lan.devices)).
 				Int("interfaces", len(lan.interfaces)).
@@ -180,19 +181,19 @@ func (lan *Agent) runTimers(ctx context.Context) {
 // discoverNics does the discovery from the output of a given function.
 // It helps to test the logic.
 func (lan *Agent) discoverNics() error {
-	itfs, err := utils2.DiscoverSystemNics()
+	itfs, err := utils.DiscoverSystemNics()
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	utils2.Logger.Trace().Strs("interfaces", itfs).Msg("disc")
+	utils.Logger.Trace().Strs("interfaces", itfs).Msg("disc")
 
 	for _, itf := range itfs {
 		lan.maybeRegisterInterface(itf)
 	}
 
 	for _, itf := range lan.interfacesStatic {
-		utils2.Logger.Info().Str("itf", itf).Str("action", "force").Msg("disc")
+		utils.Logger.Info().Str("itf", itf).Str("action", "force").Msg("disc")
 		lan.registerInterface(itf)
 	}
 	return nil
@@ -209,14 +210,14 @@ func (lan *Agent) maybeRegisterInterface(itf string) {
 			pattern = pattern[1:]
 		}
 		if match, err := regexp.MatchString(pattern, itf); err != nil {
-			utils2.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("disc")
+			utils.Logger.Warn().Str("pattern", pattern0).Str("itf", itf).Err(err).Msg("disc")
 		} else if !match {
 			continue
 		} else if !not {
-			utils2.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("disc")
+			utils.Logger.Info().Str("pattern", pattern0).Str("itf", itf).Str("action", "add").Msg("disc")
 			lan.registerInterface(itf)
 		} else {
-			utils2.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("disc")
+			utils.Logger.Debug().Str("pattern", pattern0).Str("itf", itf).Str("action", "skip").Msg("disc")
 		}
 		return
 	}
@@ -226,12 +227,16 @@ func (lan *Agent) registerInterface(itf string) {
 	lan.interfaces.Add(NewNIC(itf))
 }
 
+func runCam(cam *camera.Camera) utils.SwarmFunc {
+	return func(ctx context.Context) { cam.Run(ctx) }
+}
+
 func (lan *Agent) learnSingleCameraSync(ctx context.Context, generation uint32, discovered networking.ClientInfo) error {
 	// Preliminary check of the existence of the camera, before starting expensive queries
 	lan.dataLock.Lock()
 	devInPlace, already := lan.devices.Get(discovered.Uuid)
-	if already && generation > devInPlace.generation {
-		devInPlace.generation = generation
+	if already && generation > devInPlace.GetGeneration() {
+		devInPlace.SetGeneration(generation)
 	}
 	lan.dataLock.Unlock()
 	if already {
@@ -247,7 +252,8 @@ func (lan *Agent) learnSingleCameraSync(ctx context.Context, generation uint32, 
 	}
 
 	// Here come the http requests
-	dev := NewCamera(lan, appliance)
+	uploadOpener := NewGrpcUploadMaker(lan.Config.User, appliance.GetUUID(), lan.Config.UpstreamMedia.Address)
+	dev := camera.NewCamera(uploadOpener, appliance)
 
 	lan.dataLock.Lock()
 	defer lan.dataLock.Unlock()
@@ -256,13 +262,13 @@ func (lan *Agent) learnSingleCameraSync(ctx context.Context, generation uint32, 
 	// let's just update its generation counter
 	devInPlace, already = lan.devices.Get(dev.PK())
 	if already {
-		if generation > devInPlace.generation {
-			devInPlace.generation = generation
+		if generation > devInPlace.GetGeneration() {
+			devInPlace.SetGeneration(generation)
 		} // else ... stale discovery (why not?)
 	} else {
-		dev.generation = generation
+		dev.SetGeneration(generation)
 		lan.devices.Add(dev)
-		utils2.Logger.Info().
+		utils.Logger.Info().
 			Str("key", dev.PK()).
 			Str("endpoint", discovered.Xaddr).
 			Uint32("gen", generation).
@@ -278,13 +284,13 @@ func (lan *Agent) learnAllCamerasSync(ctx context.Context, gen uint32, discovere
 	// Update the devices that match the
 	for _, dev := range discovered {
 		if err := lan.learnSingleCameraSync(ctx, gen, dev); err != nil {
-			utils2.Logger.Warn().Str("url", dev.Xaddr).Err(err).Msg("invalid device discovered")
+			utils.Logger.Warn().Str("url", dev.Xaddr).Err(err).Msg("invalid device discovered")
 		}
 	}
 
 	toBePurged := lan.camsToBePurged(gen)
 	if len(toBePurged) > 0 {
-		utils2.Logger.Info().Str("action", "purge").Interface("count", len(toBePurged)).Msg("lan")
+		utils.Logger.Info().Str("action", "purge").Interface("count", len(toBePurged)).Msg("lan")
 	}
 
 	for _, dev := range toBePurged {
@@ -295,8 +301,8 @@ func (lan *Agent) learnAllCamerasSync(ctx context.Context, gen uint32, discovere
 	}
 }
 
-func (lan *Agent) camsToBePurged(gen uint32) []*Camera {
-	out := make([]*Camera, 0)
+func (lan *Agent) camsToBePurged(gen uint32) []*camera.Camera {
+	out := make([]*camera.Camera, 0)
 
 	lan.dataLock.Lock()
 	defer lan.dataLock.Unlock()
@@ -304,7 +310,7 @@ func (lan *Agent) camsToBePurged(gen uint32) []*Camera {
 	// Unregister and shut the devices from older generations
 	for i := len(lan.devices); i > 0; i-- {
 		dev := lan.devices[i-1]
-		if delta(gen, dev.generation) < lan.GraceGenerations {
+		if delta(gen, dev.GetGeneration()) < lan.GraceGenerations {
 			out = append(out, dev)
 		}
 	}

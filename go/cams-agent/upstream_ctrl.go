@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/aler9/gortsplib"
 	pb2 "github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/camera"
 	utils2 "github.com/jfsmig/cams/go/utils"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
@@ -110,9 +111,9 @@ func (us *upstreamAgent) onCommand(cmd upstreamCommand) error {
 	camID := cmd.streamID
 	switch cmd.cmdType {
 	case upstreamAgent_CommandPlay: // From the hub
-		return us.lan.UpdateStreamExpectation(camID, CamCommandPlay)
+		return us.lan.UpdateStreamExpectation(camID, camera.CamCommandPlay)
 	case upstreamAgent_CommandStop: // From the hub
-		return us.lan.UpdateStreamExpectation(camID, CamCommandPause)
+		return us.lan.UpdateStreamExpectation(camID, camera.CamCommandPause)
 	default:
 		return errors.New("BUG: unexpected command")
 	}

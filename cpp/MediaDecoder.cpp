@@ -44,6 +44,7 @@ MediaDecoder::MediaDecoder(const std::string_view sdp,
     avio_input_context_ = avio_alloc_context(
             readbuf_.data(), readbuf_.size(), 1,
             &source_, &read_packet, &write_packet, nullptr);
+    avio_input_context_->direct = 1;
     assert(avio_input_context_ != nullptr);
 
     input_format_context->pb = avio_input_context_;

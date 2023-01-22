@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	utils2 "github.com/jfsmig/cams/go/utils"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"os"
 	"os/signal"
@@ -19,6 +20,7 @@ func main() {
 		Long:  "LAN agent for OnVif cameras",
 		//Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
 			// FIXME(jfs): load an external configuration file or CLI options
 			cfg := DefaultConfig()
 			if flagSpeed {
