@@ -4,15 +4,16 @@ package main
 
 import (
 	"context"
+	"net"
+	"os"
+	"os/signal"
+	"sync"
+
 	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/go-bags"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
-	"net"
-	"os"
-	"os/signal"
-	"sync"
 )
 
 type Registrar interface {

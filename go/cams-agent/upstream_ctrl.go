@@ -4,15 +4,16 @@ package main
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/aler9/gortsplib"
-	pb2 "github.com/jfsmig/cams/go/api/pb"
+	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/cams/go/camera"
-	utils2 "github.com/jfsmig/cams/go/utils"
+	"github.com/jfsmig/cams/go/utils"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"sync"
-	"time"
 )
 
 type upstreamCommandType uint32
@@ -52,7 +53,7 @@ func NewUpstreamAgent(cfg AgentConfig) *upstreamAgent {
 func (us *upstreamAgent) PK() string { return "ua" }
 
 func (us *upstreamAgent) Run(ctx context.Context, lan *Agent) {
-	utils2.Logger.Debug().Str("action", "start").Msg("up")
+	utils.Logger.Debug().Str("action", "start").Msg("up")
 
 	if !us.singletonLock.TryLock() {
 		panic("BUG the upstream agent is already running")
@@ -73,10 +74,10 @@ func (us *upstreamAgent) getRegisterPeriod() time.Duration {
 }
 
 func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) error {
-	utils2.Logger.Trace().Str("action", "start").Msg("up")
+	utils.Logger.Trace().Str("action", "start").Msg("up")
 
 	registrationNext := time.After(0)
-	client := pb2.NewRegistrarClient(cnx)
+	client := pb.NewRegistrarClient(cnx)
 
 	for {
 		select {
@@ -86,11 +87,11 @@ func (us *upstreamAgent) runMain(ctx context.Context, cnx *grpc.ClientConn) erro
 		case <-registrationNext:
 			registrationNext = time.After(us.getRegisterPeriod())
 			ctx2 := metadata.NewOutgoingContext(ctx, metadata.New(map[string]string{
-				utils2.KeyUser: us.cfg.User,
+				utils.KeyUser: us.cfg.User,
 			}))
 			for _, cam := range us.lan.Cameras() {
-				inReq := pb2.RegisterRequest{
-					Id: &pb2.StreamId{
+				inReq := pb.RegisterRequest{
+					Id: &pb.StreamId{
 						User:   us.cfg.User,
 						Stream: cam.ID,
 					},
@@ -122,12 +123,12 @@ func (us *upstreamAgent) onCommand(cmd upstreamCommand) error {
 // runControl polls the control stream and forward them in the command channel
 // is the upstreamAgent
 func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) error {
-	utils2.Logger.Trace().Str("action", "start").Msg("up ctrl")
+	utils.Logger.Trace().Str("action", "start").Msg("up ctrl")
 
-	client := pb2.NewControllerClient(cnx)
+	client := pb.NewControllerClient(cnx)
 
 	ctx = metadata.AppendToOutgoingContext(ctx,
-		utils2.KeyUser, us.cfg.User)
+		utils.KeyUser, us.cfg.User)
 
 	ctrl, err := client.Control(ctx)
 	if err != nil {
@@ -136,7 +137,7 @@ func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) e
 
 	defer func() {
 		if err := ctrl.CloseSend(); err != nil {
-			utils2.Logger.Warn().Str("action", "close").Err(err).Msg("control close")
+			utils.Logger.Warn().Str("action", "close").Err(err).Msg("control close")
 		}
 	}()
 
@@ -149,34 +150,34 @@ func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) e
 		srv.Handler = gortsplib.ServerHandlerOnSessionOpenCtx{}
 
 		switch request.Command {
-		case pb2.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY:
+		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY:
 			us.control <- upstreamCommand{upstreamAgent_CommandPlay, request.StreamID}
-		case pb2.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_STOP:
+		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_STOP:
 			us.control <- upstreamCommand{upstreamAgent_CommandStop, request.StreamID}
 		}
 	}
 }
 
 func (us *upstreamAgent) reconnectAndRerun(ctx context.Context, lan *Agent) {
-	utils2.Logger.Trace().Str("action", "restart").Str("endpoint", us.cfg.UpstreamControl.Address).Msg("up")
+	utils.Logger.Trace().Str("action", "restart").Str("endpoint", us.cfg.UpstreamControl.Address).Msg("up")
 
-	cnx, err := utils2.DialInsecure(ctx, us.cfg.UpstreamControl.Address)
+	cnx, err := utils.DialInsecure(ctx, us.cfg.UpstreamControl.Address)
 	if err != nil {
-		utils2.Logger.Error().Err(err).Str("action", "dial").Msg("up")
+		utils.Logger.Error().Err(err).Str("action", "dial").Msg("up")
 		return
 	}
 	defer cnx.Close()
 
 	us.lan = lan
-	utils2.GroupRun(ctx,
+	utils.GroupRun(ctx,
 		func(c context.Context) {
 			if err := us.runControl(c, cnx); err != nil {
-				utils2.Logger.Warn().Err(err).Msg("upstream control error")
+				utils.Logger.Warn().Err(err).Msg("upstream control error")
 			}
 		},
 		func(c context.Context) {
 			if err := us.runMain(c, cnx); err != nil {
-				utils2.Logger.Warn().Err(err).Msg("upstream error")
+				utils.Logger.Warn().Err(err).Msg("upstream error")
 			}
 		})
 }

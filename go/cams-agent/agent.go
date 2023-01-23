@@ -4,17 +4,18 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"regexp"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/jfsmig/cams/go/camera"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/go-bags"
 	"github.com/jfsmig/onvif/networking"
 	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
-	"net/http"
-	"regexp"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type Agent struct {

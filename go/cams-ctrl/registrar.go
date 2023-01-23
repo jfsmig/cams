@@ -4,11 +4,12 @@ package main
 
 import (
 	"context"
+	"sync"
+	"time"
+
 	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/go-bags"
 	"github.com/juju/errors"
-	"sync"
-	"time"
 )
 
 var (
