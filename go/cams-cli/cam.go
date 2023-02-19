@@ -1,15 +1,16 @@
 package main
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"github.com/aler9/gortsplib/v2/pkg/format"
 	"github.com/aler9/gortsplib/v2/pkg/media"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,13 +45,7 @@ func camPlay(ctx context.Context, addr string) error {
 		}
 		utils.Logger.Info().Interface("device", clientInfo).Msg("OnVif device ready")
 
-		tmpDirPath, err := os.MkdirTemp("", "cams-capture-")
-		if err != nil {
-			return errors.Annotate(err, "mktemp")
-		}
-		utils.Logger.Info().Str("path", tmpDirPath).Msg("Temporary directory path ready")
-
-		cam := camera.NewCamera(NewLocalUploadMaker(tmpDirPath), dev)
+		cam := camera.NewCamera(NewLocalUploadMaker(), dev)
 		utils.Logger.Info().Interface("camera", cam).Msg("camera ready")
 
 		cam.NoRetry()
@@ -82,15 +77,37 @@ func camPlay(ctx context.Context, addr string) error {
 	return errors.New("camera not found")
 }
 
-type localUpstream struct {
-	baseDirectoryPath string
-	packetCounter     atomic.Uint64
+func NewLocalUploadMaker() camera.UploadOpenFunc {
+	return func(ctx context.Context) (camera.UpstreamMedia, error) {
+		fout, err := ioutil.TempFile("", "cams-capture-*.tar")
+		if err != nil {
+			return nil, errors.Annotate(err, "mktemp")
+		}
+		w := tar.NewWriter(fout)
+		if err != nil {
+			return nil, errors.Annotate(err, "create")
+		}
+		return &localUpstream{
+			file:    fout,
+			archive: w,
+		}, nil
+	}
 }
 
-func (lu *localUpstream) Close() {}
+type localUpstream struct {
+	file          *os.File
+	archive       *tar.Writer
+	packetCounter atomic.Uint64
+}
 
-func (lu *localUpstream) OnSDP(sdp []byte) error {
-	return lu.writeFile("sdp", sdp)
+func (lu *localUpstream) Close() {
+	lu.archive.Flush()
+	lu.archive.Close()
+	lu.file.Close()
+}
+
+func (lu *localUpstream) OnSDP(sdp string) error {
+	return lu.writeFile("sdp", []byte(sdp))
 }
 
 func (lu *localUpstream) OnRTP(m *media.Media, f format.Format, pkt *rtp.Packet) error {
@@ -111,20 +128,22 @@ func (lu *localUpstream) OnRTCP(m *media.Media, pkt *rtcp.Packet) error {
 
 func (lu *localUpstream) writeFile(tag string, payload []byte) error {
 	idx := lu.packetCounter.Add(1)
-	basename := fmt.Sprintf("%06d", idx) + "." + tag
-	fout, err := os.OpenFile(filepath.Join(lu.baseDirectoryPath, basename), os.O_EXCL|os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		return errors.Annotatef(err, "open error on [%v]", basename)
+	path := fmt.Sprintf("%06d", idx) + "." + tag
+	sz := int64(len(payload))
+	utils.Logger.Info().Str("path", path).Int64("size", sz).Msg("entry")
+	hdr := tar.Header{
+		Name:       path,
+		Size:       sz,
+		AccessTime: time.Now(),
+		ModTime:    time.Now(),
+		ChangeTime: time.Now(),
+		Mode:       0644,
+		Typeflag:   tar.TypeReg,
+		Format:     tar.FormatGNU,
 	}
-	defer fout.Close()
-	_, err = fout.Write(payload)
-	return errors.Annotatef(err, "write error on [%v]", basename)
-}
-
-func NewLocalUploadMaker(path string) camera.UploadOpenFunc {
-	return func(ctx context.Context) (camera.UpstreamMedia, error) {
-		return &localUpstream{
-			baseDirectoryPath: path,
-		}, nil
+	if err := lu.archive.WriteHeader(&hdr); err != nil {
+		return errors.Annotate(err, "tar header")
 	}
+	_, err := lu.archive.Write(payload)
+	return errors.Annotate(err, "tar body")
 }

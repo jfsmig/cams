@@ -4,11 +4,10 @@ package main
 
 import (
 	"context"
-	"os"
-	"os/signal"
-
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/spf13/cobra"
+	"os"
+	"os/signal"
 )
 
 func main() {

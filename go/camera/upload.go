@@ -10,7 +10,7 @@ import (
 
 type UpstreamMedia interface {
 	Close()
-	OnSDP(sdp []byte) error
+	OnSDP(sdp string) error
 	OnRTP(m *media.Media, f format.Format, pkt *rtp.Packet) error
 	OnRTCP(m *media.Media, pkt *rtcp.Packet) error
 }

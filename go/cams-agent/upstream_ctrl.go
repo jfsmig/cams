@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aler9/gortsplib"
+	"github.com/aler9/gortsplib/v2"
 	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/cams/go/camera"
 	"github.com/jfsmig/cams/go/utils"

@@ -24,10 +24,10 @@ func (gu *grpcUpstream) Close() {
 	_ = gu.cnx.Close()
 }
 
-func (gu *grpcUpstream) OnSDP(sdp []byte) error {
+func (gu *grpcUpstream) OnSDP(sdp string) error {
 	frame := &pb.DownstreamMediaFrame{
 		Type:    pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_SDP,
-		Payload: sdp,
+		Payload: []byte(sdp),
 	}
 	return gu.uploadClient.Send(frame)
 }

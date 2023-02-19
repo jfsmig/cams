@@ -188,6 +188,12 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	if err != nil {
 		return errors.Annotate(err, "describe")
 	}
+	sdp := string(sdpResp.Body)
+	cam.debug().
+		Str("url", baseUrl.String()).
+		Str("sdp", sdp).
+		Interface("medias", medias).
+		Msg("streams described")
 
 	// Prepare the upstream side
 	upload, err := cam.open(ctx)
@@ -196,9 +202,15 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	}
 	defer upload.Close()
 
-	_, err = cam.rtspClient.Setup(medias[0], baseUrl, 0, 0)
-	if err != nil {
-		return errors.Annotate(err, "setup")
+	var fmt *format.H264
+	mediaH264 := medias.FindFormat(&fmt)
+	if mediaH264 == nil {
+		return errors.New("no h264")
+	} else {
+		_, err = cam.rtspClient.Setup(mediaH264, baseUrl, 0, 0)
+		if err != nil {
+			return errors.Annotate(err, "setup")
+		}
 	}
 
 	// We need a way to break the current goroutine that is just waiting for
@@ -234,7 +246,7 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 		}
 	})
 
-	if err = upload.OnSDP(sdpResp.Body); err != nil {
+	if err = upload.OnSDP(sdp); err != nil {
 		return errors.Annotate(err, "send sdp banner")
 	}
 
