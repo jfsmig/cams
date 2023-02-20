@@ -72,6 +72,37 @@ go test ./...
 * [OnVif]
 * [gRPC]
 
+
+## Golang RTSP / RTP / RTCP
+
+If you are interested in a very good library to handle an IP-camera, you should really consider
+starting with [gortsplib] instead of [jfsmig/cams/go/rtsp1]. [Aler9] wrote 99.9% of the source
+in the current repository, he is to be praised. [gortsplib] is very good, moving fast,
+handling the weirdness of heterogenous hardware. What else?
+
+On the other hand, [jfsmig/cams/go/rtsp1] achieves the same tasks but gives more control to the
+developer. Instead of one big swiss-army-knife library that will handle all the logic of the
+streaming, you get individual libraries with little intersection in the purposes.
+
+* [jfsmig/cams/go/rtsp1] won't decode nor encode packets of the various media. Barely the smallest minimal
+set of feature is kept to quickly recognized a codec from a frame. That's all.
+* [jfsmig/cams/go/transport] won't handle RTP and RTCP streams. When calling `gortsplib.Client.Play()` you
+can provide unknown ports with a zero value. With rtsp1/Client.Play() you must provide
+pre-established viable ports. 
+
+Why such the need for a split? When trying to use [gortsplib] to capture RTP packets, the experience with RTSP was very
+pleasant (i.e. working soon after the first try) until the need to capture the raw RTP stream
+shown up. This happens in an architecture which does the decoding in an existing software, which
+doesn't require any heavyweight parsing on the field. It turned to be very complicated.
+
+
+[aler9]: https://github.com/aler9
+[gortsplib]: https://github.com/aler9/gortsplib
+[aler9/gortsplib]: https://github.com/aler9/gortsplib
+[jfsmig/cams/go/rtsp1]: https://github.com/jfsmig/cams/go/rtsp1
+[jfsmig/cams/go/transport]: https://pkg.go.dev/github.com/jfsmig/cams/go/transport
+
+
 [rfc2326]: https://datatracker.ietf.org/doc/html/rfc2326
 [rfc3550]: https://datatracker.ietf.org/doc/html/rfc3550
 [rfc5760]: https://datatracker.ietf.org/doc/html/rfc5760

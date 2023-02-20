@@ -2,7 +2,7 @@ package media
 
 import (
 	"fmt"
-	"github.com/jfsmig/streaming/rtsp1/pkg/sdp"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/sdp"
 
 	"github.com/google/uuid"
 	psdp "github.com/pion/sdp/v3"

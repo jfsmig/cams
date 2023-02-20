@@ -3,7 +3,7 @@ package format
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/jfsmig/streaming/rtsp1/pkg/codecs/mpeg4audio"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/codecs/mpeg4audio"
 	"strconv"
 	"strings"
 )

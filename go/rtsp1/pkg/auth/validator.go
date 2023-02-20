@@ -4,9 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	base2 "github.com/jfsmig/streaming/rtsp1/pkg/base"
-	headers2 "github.com/jfsmig/streaming/rtsp1/pkg/headers"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
+	base2 "github.com/jfsmig/cams/go/rtsp1/pkg/base"
+	headers2 "github.com/jfsmig/cams/go/rtsp1/pkg/headers"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 	"strings"
 )
 

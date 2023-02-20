@@ -2,7 +2,7 @@ package base
 
 import (
 	"bytes"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"

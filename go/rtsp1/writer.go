@@ -1,7 +1,7 @@
 package rtsp1
 
 import (
-	"github.com/jfsmig/streaming/rtsp1/pkg/ringbuffer"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/ringbuffer"
 )
 
 // this struct contains a queue that allows to detach the routine that is reading a stream

@@ -1,7 +1,7 @@
 package auth
 
 import (
-	base2 "github.com/jfsmig/streaming/rtsp1/pkg/base"
+	base2 "github.com/jfsmig/cams/go/rtsp1/pkg/base"
 	"testing"
 
 	"github.com/stretchr/testify/require"

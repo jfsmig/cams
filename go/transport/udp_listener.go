@@ -12,29 +12,61 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type UdpListener struct {
+type StreamListener interface {
+	Close() error
+	GetMediaChannel() <-chan []byte
+	GetControlChannel() <-chan []byte
+}
+
+type UdpListener interface {
+	StreamListener
+	GetPortMedia() int
+	GetPortControl() int
+	OpenRandom(addr string) error
+	OpenPair(addr string) error
+	Run(ctx context.Context) error
+}
+
+func NewRawUdpListener() UdpListener {
+	return &rawUdpListener{}
+}
+
+type rawUdpListener struct {
 	media   net.PacketConn
 	control net.PacketConn
+
+	mediaOut   chan []byte
+	controlOut chan []byte
 
 	singletonLock sync.Mutex
 }
 
-func (ul *UdpListener) GetPortMedia() int {
+func (ul *rawUdpListener) GetMediaChannel() <-chan []byte {
+	return ul.mediaOut
+}
+
+func (ul *rawUdpListener) GetControlChannel() <-chan []byte {
+	return ul.controlOut
+}
+
+func (ul *rawUdpListener) GetPortMedia() int {
 	return getPort(ul.media)
 }
 
-func (ul *UdpListener) GetPortControl() int {
+func (ul *rawUdpListener) GetPortControl() int {
 	return getPort(ul.control)
 }
 
-func (ul *UdpListener) OpenRandom(addr string) error {
-	if ul == nil || ul.media != nil || ul.control != nil {
+func (ul *rawUdpListener) OpenRandom(addr string) error {
+	if !ul.isClear() {
 		return errors.New("opening an opened listener")
 	}
 	if !ul.singletonLock.TryLock() {
 		return errors.New("opening a running listener")
 	}
 	defer ul.release()
+
+	ul.init()
 
 	var err error
 	ul.media, err = openPort(addr, 0)
@@ -51,14 +83,16 @@ func (ul *UdpListener) OpenRandom(addr string) error {
 	return nil
 }
 
-func (ul *UdpListener) OpenPair(addr string) error {
-	if ul == nil || ul.media != nil || ul.control != nil {
+func (ul *rawUdpListener) OpenPair(addr string) error {
+	if !ul.isClear() {
 		return errors.New("opening an opened listener")
 	}
 	if !ul.singletonLock.TryLock() {
 		return errors.New("opening a running listener")
 	}
 	defer ul.release()
+
+	ul.init()
 
 	var err error
 	for port := 0; ; port++ {
@@ -79,9 +113,13 @@ func (ul *UdpListener) OpenPair(addr string) error {
 	}
 }
 
-func (ul *UdpListener) Close() {
-	if ul == nil || ul.singletonLock.TryLock() {
-		return
+func (ul *rawUdpListener) Close() error {
+	if ul == nil {
+		return nil
+	}
+
+	if !ul.singletonLock.TryLock() {
+		panic("listener still in use")
 	}
 	defer ul.release()
 
@@ -93,9 +131,11 @@ func (ul *UdpListener) Close() {
 		ul.control.Close()
 		ul.control = nil
 	}
+
+	return nil
 }
 
-func (ul *UdpListener) Run(ctx context.Context, outMedia, outControl chan []byte) error {
+func (ul *rawUdpListener) Run(ctx context.Context) error {
 	if err := ul.acquire(); err != nil {
 		return errors.Trace(err)
 	}
@@ -119,13 +159,26 @@ func (ul *UdpListener) Run(ctx context.Context, outMedia, outControl chan []byte
 		}
 		return nil
 	}
-	g.Go(func() error { return runCnx(ul.media, outMedia) })
-	g.Go(func() error { return runCnx(ul.control, outControl) })
+	g.Go(func() error { return runCnx(ul.media, ul.mediaOut) })
+	g.Go(func() error { return runCnx(ul.control, ul.controlOut) })
 	return g.Wait()
 }
 
-func (ul *UdpListener) acquire() error {
-	if ul == nil || ul.media == nil || ul.control == nil {
+func (ul *rawUdpListener) init() {
+	ul.mediaOut = make(chan []byte, 64)
+	ul.controlOut = make(chan []byte, 4)
+}
+
+func (ul *rawUdpListener) isOk() bool {
+	return ul != nil && ul.media != nil && ul.control != nil
+}
+
+func (ul *rawUdpListener) isClear() bool {
+	return ul == nil || ul.media == nil && ul.control == nil
+}
+
+func (ul *rawUdpListener) acquire() error {
+	if !ul.isOk() {
 		return errors.New("udp listener invalid state")
 	}
 	if !ul.singletonLock.TryLock() {
@@ -135,7 +188,7 @@ func (ul *UdpListener) acquire() error {
 	return nil
 }
 
-func (ul *UdpListener) release() {
+func (ul *rawUdpListener) release() {
 	if ul != nil {
 		ul.singletonLock.Unlock()
 	}

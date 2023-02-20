@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jfsmig/streaming/rtsp1"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
-	"github.com/jfsmig/streaming/transport"
+	"github.com/jfsmig/cams/go/rtsp1"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
+	"github.com/jfsmig/cams/go/transport"
 	"github.com/pion/rtp"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -73,13 +73,11 @@ func main() {
 	}
 
 	// Prepare the background handling of the RTP & RTCP frames
-	udpListener := transport.UdpListener{}
+	udpListener := transport.NewRawUdpListener()
 	if err := udpListener.OpenPair("0.0.0.0"); err != nil {
 		Logger.Panic().Err(err).Msg("udp listener error")
 	}
 	defer udpListener.Close()
-	outMedia := make(chan []byte, 64)
-	outControl := make(chan []byte, 4)
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		return udpListener.Run(ctx, outMedia, outControl)

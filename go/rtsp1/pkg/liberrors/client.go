@@ -2,7 +2,7 @@ package liberrors
 
 import (
 	"fmt"
-	base2 "github.com/jfsmig/streaming/rtsp1/pkg/base"
+	base2 "github.com/jfsmig/cams/go/rtsp1/pkg/base"
 )
 
 // ErrClientTerminated is an error that can be returned by a client.

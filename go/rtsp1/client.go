@@ -15,14 +15,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jfsmig/streaming/rtsp1/pkg/auth"
-	"github.com/jfsmig/streaming/rtsp1/pkg/base"
-	"github.com/jfsmig/streaming/rtsp1/pkg/bytecounter"
-	"github.com/jfsmig/streaming/rtsp1/pkg/headers"
-	"github.com/jfsmig/streaming/rtsp1/pkg/liberrors"
-	"github.com/jfsmig/streaming/rtsp1/pkg/media"
-	"github.com/jfsmig/streaming/rtsp1/pkg/sdp"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/auth"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/base"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/bytecounter"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/headers"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/liberrors"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/media"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/sdp"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 )
 
 func isAnyPort(p int) bool {

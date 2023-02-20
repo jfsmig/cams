@@ -1,7 +1,7 @@
 package headers
 
 import (
-	"github.com/jfsmig/streaming/rtsp1/pkg/base"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/base"
 	"net"
 	"testing"
 

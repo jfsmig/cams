@@ -2,8 +2,8 @@ package auth
 
 import (
 	"fmt"
-	base2 "github.com/jfsmig/streaming/rtsp1/pkg/base"
-	headers2 "github.com/jfsmig/streaming/rtsp1/pkg/headers"
+	base2 "github.com/jfsmig/cams/go/rtsp1/pkg/base"
+	headers2 "github.com/jfsmig/cams/go/rtsp1/pkg/headers"
 	"strings"
 )
 

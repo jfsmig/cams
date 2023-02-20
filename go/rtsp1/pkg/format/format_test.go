@@ -1,7 +1,7 @@
 package format
 
 import (
-	mpeg4audio2 "github.com/jfsmig/streaming/rtsp1/pkg/codecs/mpeg4audio"
+	mpeg4audio2 "github.com/jfsmig/cams/go/rtsp1/pkg/codecs/mpeg4audio"
 	"testing"
 
 	psdp "github.com/pion/sdp/v3"

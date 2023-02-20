@@ -4,7 +4,7 @@ package base
 import (
 	"bufio"
 	"fmt"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 	"strconv"
 )
 

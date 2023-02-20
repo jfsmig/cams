@@ -3,8 +3,8 @@ package media
 
 import (
 	"fmt"
-	"github.com/jfsmig/streaming/rtsp1/pkg/format"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/format"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 	"reflect"
 	"strconv"
 	"strings"

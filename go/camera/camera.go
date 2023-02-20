@@ -5,18 +5,14 @@ package camera
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/aler9/gortsplib/v2"
-	"github.com/aler9/gortsplib/v2/pkg/format"
-	"github.com/aler9/gortsplib/v2/pkg/media"
-	"github.com/aler9/gortsplib/v2/pkg/url"
+	"github.com/jfsmig/cams/go/rtsp1"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/format"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"github.com/rs/zerolog"
 )
 
@@ -57,7 +53,7 @@ type Camera struct {
 	State         CamAgentState
 
 	onvifClient sdk.Appliance
-	rtspClient  gortsplib.Client
+	rtspClient  rtsp1.Client
 
 	requests chan CamCommand
 
@@ -67,19 +63,16 @@ type Camera struct {
 }
 
 func NewCamera(open UploadOpenFunc, appliance sdk.Appliance) *Camera {
-	transport := gortsplib.TransportUDP
 	return &Camera{
 		open:        open,
 		ID:          appliance.GetUUID(),
 		generation:  0,
 		onvifClient: appliance,
-		rtspClient: gortsplib.Client{
-			ReadTimeout:           5 * time.Second,
-			WriteTimeout:          5 * time.Second,
-			RedirectDisable:       true,
-			AnyPortEnable:         true,
-			Transport:             &transport,
-			InitialUDPReadTimeout: 3 * time.Second,
+		rtspClient: rtsp1.Client{
+			ReadTimeout:     5 * time.Second,
+			WriteTimeout:    5 * time.Second,
+			RedirectDisable: true,
+			AnyPortEnable:   true,
 		},
 		requests:  make(chan CamCommand, 8),
 		flagRetry: true,
@@ -109,9 +102,6 @@ func (cam *Camera) Run(ctx context.Context) {
 		close(cam.requests)
 		cam.requests = nil
 	}()
-
-	transport := gortsplib.TransportUDP
-	cam.rtspClient.Transport = &transport
 
 	for {
 		select {
@@ -179,7 +169,7 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 
 	cam.debug().Str("url", sourceUrl.Host).Msg("cam streaming")
 
-	if err = cam.rtspClient.Start(sourceUrl.Scheme, sourceUrl.Host); err != nil {
+	if err = cam.rtspClient.Start(ctx, sourceUrl.Scheme, sourceUrl.Host); err != nil {
 		return errors.Annotate(err, "start")
 	}
 	defer func() { _ = cam.rtspClient.Close() }()
@@ -213,39 +203,6 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 		}
 	}
 
-	// We need a way to break the current goroutine that is just waiting for
-	// termination notifications on channels
-	localError := make(chan error, 2)
-	defer close(localError)
-	// We need a way to prevent the rtsp client to notify for errors when the
-	// localError channel has been closed.
-	var localStop atomic.Bool
-
-	// We need a way to detect the inactivity of the camera.
-	// So we check every second that at least one packet has been seen.
-	activityJiffies := atomic.Uint64{}
-	activityCheckTicker := time.Tick(3 * time.Second)
-
-	cam.rtspClient.OnPacketRTPAny(func(m *media.Media, f format.Format, pkt *rtp.Packet) {
-		activityJiffies.Add(1)
-		if err2 := upload.OnRTP(m, f, pkt); err2 != nil {
-			cam.warn(err2).Msg("rtp upload")
-			if !localStop.Swap(true) {
-				localError <- err2
-			}
-		}
-	})
-
-	cam.rtspClient.OnPacketRTCPAny(func(m *media.Media, pkt rtcp.Packet) {
-		activityJiffies.Add(1)
-		if err2 := upload.OnRTCP(m, &pkt); err2 != nil {
-			cam.warn(err2).Msg("rtcp upload")
-			if !localStop.Swap(true) {
-				localError <- err2
-			}
-		}
-	})
-
 	if err = upload.OnSDP(sdp); err != nil {
 		return errors.Annotate(err, "send sdp banner")
 	}
@@ -257,21 +214,6 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 		return errors.Annotate(err, "play")
 	}
 
-	for activityPrevious := activityJiffies.Load(); ; {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case err = <-localError:
-			return err
-		case <-activityCheckTicker:
-			activityCurrent := activityJiffies.Load()
-			if activityCurrent == activityPrevious {
-				localStop.Store(true)
-				return errors.New("timeout")
-			}
-			activityPrevious = activityCurrent
-		}
-	}
 }
 
 func (cam *Camera) queryMediaUrl(ctx context.Context) (*url.URL, error) {

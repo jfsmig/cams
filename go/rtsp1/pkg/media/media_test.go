@@ -1,9 +1,9 @@
 package media
 
 import (
-	format2 "github.com/jfsmig/streaming/rtsp1/pkg/format"
-	"github.com/jfsmig/streaming/rtsp1/pkg/sdp"
-	"github.com/jfsmig/streaming/rtsp1/pkg/url"
+	format2 "github.com/jfsmig/cams/go/rtsp1/pkg/format"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/sdp"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"

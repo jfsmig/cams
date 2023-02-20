@@ -8,7 +8,6 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jfsmig/go-bags v0.2.0
 	github.com/jfsmig/onvif v1.1.0
-	github.com/jfsmig/streaming v0.0.0-20230219132329-a4d51af4cba7
 	github.com/juju/errors v1.0.0
 	github.com/pion/rtcp v1.2.9
 	github.com/pion/rtp v1.7.13

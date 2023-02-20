@@ -2,7 +2,7 @@ package mpeg4audio
 
 import (
 	"fmt"
-	bits2 "github.com/jfsmig/streaming/rtsp1/pkg/bits"
+	bits2 "github.com/jfsmig/cams/go/rtsp1/pkg/bits"
 )
 
 // Config is a MPEG-4 Audio configuration.

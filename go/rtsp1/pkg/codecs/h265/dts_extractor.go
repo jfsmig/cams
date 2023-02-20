@@ -2,8 +2,8 @@ package h265
 
 import (
 	"fmt"
-	"github.com/jfsmig/streaming/rtsp1/pkg/bits"
-	"github.com/jfsmig/streaming/rtsp1/pkg/codecs/h264"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/bits"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/codecs/h264"
 	"time"
 )
 
