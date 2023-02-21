@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aler9/gortsplib/v2"
 	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/cams/go/camera"
 	"github.com/jfsmig/cams/go/utils"
@@ -146,8 +145,6 @@ func (us *upstreamAgent) runControl(ctx context.Context, cnx *grpc.ClientConn) e
 		if err != nil {
 			return errors.Annotate(err, "control recv")
 		}
-		srv := gortsplib.Server{}
-		srv.Handler = gortsplib.ServerHandlerOnSessionOpenCtx{}
 
 		switch request.Command {
 		case pb.DownstreamCommandType_DOWNSTREAM_COMMAND_TYPE_PLAY:

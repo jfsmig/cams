@@ -4,10 +4,6 @@ import (
 	"archive/tar"
 	"context"
 	"fmt"
-	"github.com/aler9/gortsplib/v2/pkg/format"
-	"github.com/aler9/gortsplib/v2/pkg/media"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -110,20 +106,12 @@ func (lu *localUpstream) OnSDP(sdp string) error {
 	return lu.writeFile("sdp", []byte(sdp))
 }
 
-func (lu *localUpstream) OnRTP(m *media.Media, f format.Format, pkt *rtp.Packet) error {
-	payload, err := pkt.Marshal()
-	if err != nil {
-		return errors.Annotate(err, "rtp marshalling")
-	}
-	return lu.writeFile("rtp", payload)
+func (lu *localUpstream) OnRTP(pkt []byte) error {
+	return lu.writeFile("rtp", pkt)
 }
 
-func (lu *localUpstream) OnRTCP(m *media.Media, pkt *rtcp.Packet) error {
-	payload, err := (*pkt).Marshal()
-	if err != nil {
-		return errors.Annotate(err, "rtcp marshalling")
-	}
-	return lu.writeFile("rtcp", payload)
+func (lu *localUpstream) OnRTCP(pkt []byte) error {
+	return lu.writeFile("rtcp", pkt)
 }
 
 func (lu *localUpstream) writeFile(tag string, payload []byte) error {

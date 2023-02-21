@@ -3,14 +3,10 @@ package main
 import (
 	"context"
 
-	"github.com/aler9/gortsplib/v2/pkg/format"
-	"github.com/aler9/gortsplib/v2/pkg/media"
 	"github.com/jfsmig/cams/go/api/pb"
 	"github.com/jfsmig/cams/go/camera"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/juju/errors"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -32,28 +28,20 @@ func (gu *grpcUpstream) OnSDP(sdp string) error {
 	return gu.uploadClient.Send(frame)
 }
 
-func (gu *grpcUpstream) OnRTP(m *media.Media, f format.Format, pkt *rtp.Packet) error {
-	b, err := pkt.Marshal()
-	if err == nil {
-		frame := &pb.DownstreamMediaFrame{
-			Type:    pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTP,
-			Payload: b,
-		}
-		err = gu.uploadClient.Send(frame)
+func (gu *grpcUpstream) OnRTP(pkt []byte) error {
+	frame := &pb.DownstreamMediaFrame{
+		Type:    pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTP,
+		Payload: pkt,
 	}
-	return err
+	return gu.uploadClient.Send(frame)
 }
 
-func (gu *grpcUpstream) OnRTCP(m *media.Media, pkt *rtcp.Packet) error {
-	b, err := (*pkt).Marshal()
-	if err == nil {
-		frame := &pb.DownstreamMediaFrame{
-			Type:    pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP,
-			Payload: b,
-		}
-		err = gu.uploadClient.Send(frame)
+func (gu *grpcUpstream) OnRTCP(pkt []byte) error {
+	frame := &pb.DownstreamMediaFrame{
+		Type:    pb.DownstreamMediaFrameType_DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP,
+		Payload: pkt,
 	}
-	return err
+	return gu.uploadClient.Send(frame)
 }
 
 func NewGrpcUploadMaker(userID, camID, url string) camera.UploadOpenFunc {

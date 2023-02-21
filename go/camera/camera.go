@@ -8,12 +8,16 @@ import (
 	"time"
 
 	"github.com/jfsmig/cams/go/rtsp1"
-	"github.com/jfsmig/cams/go/rtsp1/pkg/format"
+	"github.com/jfsmig/cams/go/rtsp1/pkg/media"
 	"github.com/jfsmig/cams/go/rtsp1/pkg/url"
+	"github.com/jfsmig/cams/go/transport"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 )
 
 type CamAgentState uint32
@@ -161,7 +165,7 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	var sourceUrl *url.URL
 	var err error
 
-	// Prepare the camera side
+	// Prepare the camera RTSP side
 	sourceUrl, err = cam.queryMediaUrl(ctx)
 	if err != nil {
 		return errors.Annotate(err, "queryMediaUrl")
@@ -192,20 +196,59 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 	}
 	defer upload.Close()
 
-	var fmt *format.H264
-	mediaH264 := medias.FindFormat(&fmt)
-	if mediaH264 == nil {
-		return errors.New("no h264")
-	} else {
-		_, err = cam.rtspClient.Setup(mediaH264, baseUrl, 0, 0)
+	// Prepare the camera RTP/RTCP side
+	udpListener := transport.NewRawUdpListener()
+	if err := udpListener.OpenPair("0.0.0.0"); err != nil {
+		utils.Logger.Panic().Err(err).Msg("udp listener error")
+	}
+	defer udpListener.Close()
+
+	for _, m := range medias {
+		if m.Type != media.TypeVideo {
+			continue
+		}
+		_, err = cam.rtspClient.Setup(m, baseUrl, udpListener.GetPortMedia(), udpListener.GetPortControl())
 		if err != nil {
-			return errors.Annotate(err, "setup")
+			return errors.Annotate(err, "RTSP Setup")
+		} else {
+			utils.Logger.Info().Interface("media", *m).Msg("RTSP Setup")
 		}
 	}
 
 	if err = upload.OnSDP(sdp); err != nil {
 		return errors.Annotate(err, "send sdp banner")
 	}
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return udpListener.Run(ctx)
+	})
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case pkt := <-udpListener.GetMediaChannel():
+				decoded := rtp.Header{}
+				if _, err := decoded.Unmarshal(pkt); err != nil {
+					utils.Logger.Warn().Int("size", len(pkt)).Err(err).Msg("rtp")
+				} else {
+					if err = upload.OnRTP(pkt); err != nil {
+						return err
+					}
+				}
+			case pkt := <-udpListener.GetControlChannel():
+				decoded := rtcp.Header{}
+				if err := decoded.Unmarshal(pkt); err != nil {
+					utils.Logger.Warn().Int("size", len(pkt)).Err(err).Msg("rtcp")
+				} else {
+					if err = upload.OnRTCP(pkt); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	})
 
 	// Spawn goroutines that will consume the camera stream
 	_, err = cam.rtspClient.Play(nil)
@@ -214,6 +257,7 @@ func (cam *Camera) runStreamOnce(ctx context.Context) error {
 		return errors.Annotate(err, "play")
 	}
 
+	return g.Wait()
 }
 
 func (cam *Camera) queryMediaUrl(ctx context.Context) (*url.URL, error) {

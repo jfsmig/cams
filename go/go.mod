@@ -3,7 +3,6 @@ module github.com/jfsmig/cams/go
 go 1.19
 
 require (
-	github.com/aler9/gortsplib/v2 v2.0.5
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/jfsmig/go-bags v0.2.0
