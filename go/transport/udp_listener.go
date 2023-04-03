@@ -145,8 +145,8 @@ func (ul *rawUdpListener) Run(ctx context.Context) error {
 	getBuffer := func() []byte { return make([]byte, 8192) }
 
 	runCnx := func(cnx net.PacketConn, out chan []byte) error {
+		buf := getBuffer()
 		for ctx.Err() == nil {
-			buf := getBuffer()
 			_ = cnx.SetDeadline(time.Now().Add(time.Second))
 			if n, _, err := cnx.ReadFrom(buf); err != nil {
 				if err, ok := err.(net.Error); ok && err.Timeout() {
@@ -155,6 +155,7 @@ func (ul *rawUdpListener) Run(ctx context.Context) error {
 				return errors.Trace(err)
 			} else {
 				out <- buf[:n]
+				buf = getBuffer()
 			}
 		}
 		return nil
@@ -165,8 +166,8 @@ func (ul *rawUdpListener) Run(ctx context.Context) error {
 }
 
 func (ul *rawUdpListener) init() {
-	ul.mediaOut = make(chan []byte, 64)
-	ul.controlOut = make(chan []byte, 4)
+	ul.mediaOut = make(chan []byte, 512)
+	ul.controlOut = make(chan []byte, 8)
 }
 
 func (ul *rawUdpListener) isOk() bool {

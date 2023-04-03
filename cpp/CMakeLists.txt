@@ -10,6 +10,7 @@ find_program(GRPC_CPP_PLUGIN_EXECUTABLE grpc_cpp_plugin)
 
 pkg_check_modules(GRPCPP REQUIRED grpc++)
 pkg_check_modules(PROTOBUF REQUIRED protobuf)
+pkg_check_modules(ARCHIVE REQUIRED libarchive)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
     libavfilter
     libavformat
@@ -71,11 +72,12 @@ add_library(baselib OBJECT
         Uncopyable.hpp)
 target_link_libraries(baselib PUBLIC alldeps)
 
-add_executable(cams-rtp-to-hls
+add_executable(cams-rtp2hls
         MediaService.cpp MediaService.hpp
-        main.cpp)
-target_link_libraries(cams-rtp-to-hls alldeps baselib)
+        rtp2hls.cpp)
+target_link_libraries(cams-rtp2hls alldeps baselib)
 
-add_executable(test-av
-        test_av.cpp)
-target_link_libraries(test-av alldeps baselib)
+add_executable(test-rtp2hls
+        test_rtp2hls.cpp)
+target_link_libraries(test-rtp2hls alldeps baselib
+        ${ARCHIVE_LIBRARIES})

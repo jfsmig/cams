@@ -25,6 +25,7 @@ var authInfo = networking.ClientAuth{
 }
 
 func camPlay(ctx context.Context, addr string) error {
+	// FIXME(jfsmig): We currently need a UUID that is only provided by a discovery. it sucks as is.
 	allClientInfo, err := wsdiscovery.GetAvailableDevicesAtSpecificEthernetInterface("enp5s0")
 	if err != nil {
 		return errors.Annotate(err, "discover")
