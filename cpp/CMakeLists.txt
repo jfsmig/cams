@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.25)
 project(cams-cpp)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -65,7 +65,6 @@ add_library(baselib OBJECT
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.pb.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.h"
         "${CMAKE_CURRENT_SOURCE_DIR}/hub.grpc.pb.cc"
-        MediaSource.hpp
         MediaDecoder.cpp MediaDecoder.hpp
         MediaEncoder.cpp MediaEncoder.hpp
         StreamStorage.cpp StreamStorage.hpp

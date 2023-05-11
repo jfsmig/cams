@@ -3,6 +3,13 @@ ARG UBUNTU_VERSION=22.04
 FROM ubuntu:${UBUNTU_VERSION} AS stage0
 
 USER 0
+LABEL \
+    maintainer="jf.smigielski@gmail.com" \
+    version="0.1" \
+    description="cams CI image, packed with all the deps"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN set -ex \
  && echo "Etc/UTC" > /etc/timezone \
  && ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime
@@ -20,7 +27,7 @@ RUN set -ex \
         autoconf \
         libtool \
         pkg-config \
-        cmake \
+        gdb \
         clang \
         libc++-dev \
         zlib1g zlib1g-dev \
@@ -93,20 +100,19 @@ RUN set -ex \
 #----------------------------------------------------------------------------#
 # Install the custom build tools
 
-ARG CMAKE_VERSION=v3.25.1
+ARG CMAKE_VERSION=v3.26.3
 RUN set -ex \
  && git clone https://github.com/Kitware/CMake.git \
  && cd CMake \
  && git checkout -b release-${CMAKE_VERSION} ${CMAKE_VERSION} \
  && git submodule update --init \
- && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local . \
+ && ./bootstrap --prefix=/usr --parallel=`nproc --ignore=2` \
  && make -j `nproc --ignore=2` \
  && make install \
  && cd - \
- && rm -rf CMake \
- && apt-get remove --purge -y cmake
+ && rm -rf CMake
 
-ARG GRPC_VERSION=v1.51.1
+ARG GRPC_VERSION=v1.52.2
 RUN set -ex \
  && git clone https://github.com/grpc/grpc.git \
  && cd grpc \
@@ -118,7 +124,7 @@ RUN set -ex \
  && cd - \
  && rm -rf grpc
 
-ARG GO_VERSION=1.19.2
+ARG GO_VERSION=1.20.4
 ARG GO_URL=https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
 RUN set -ex\
  && curl  -K - -SL ${GO_URL} -o /tmp/go.linux-amd64.tar.gz \
@@ -141,24 +147,23 @@ RUN set -ex \
 ARG LOCAL_USER=dev
 ENV GOPATH=/home/$LOCAL_USER/go GOROOT=/usr/local/go
 
-RUN set -ex \
- && mkdir /etc/skel/build /etc/skel/go /etc/skel/src \
- && groupadd -g 1000 $LOCAL_USER \
- && useradd -g 1000 -u 1000 -m $LOCAL_USER \
- && usermod -aG sudo $LOCAL_USER \
- && usermod --shell /bin/bash $LOCAL_USER \
- && echo "export GIT_TRACE_PACKET=1" >> /home/$LOCAL_USER/.bashrc \
- && echo "export GIT_TRACE=1" >> /home/$LOCAL_USER/.bashrc \
- && echo "export GIT_CURL_VERBOSE=1" >> /home/$LOCAL_USER/.bashrc \
- && echo "export PATH=\"/home/$LOCAL_USER/go/bin:\$PATH\"" >> /home/$LOCAL_USER/.bashrc \
- && echo "export GOPATH=\"/home/$LOCAL_USER/go\"" >> /home/$LOCAL_USER/.bashrc \
- && echo "export GOROOT=\"/usr/local/go\"" >> /home/$LOCAL_USER/.bashrc \
- && mkdir -p -m 700 /home/$LOCAL_USER/.ssh/ \
- && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
- && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
-
-USER ${LOCAL_USER}
-WORKDIR /home/${LOCAL_USER}
+#	RUN set -ex \
+#	 && mkdir /etc/skel/build /etc/skel/go /etc/skel/src \
+#	 && groupadd -g 1000 $LOCAL_USER \
+#	 && useradd -g 1000 -u 1000 -m $LOCAL_USER \
+#	 && usermod -aG sudo $LOCAL_USER \
+#	 && usermod --shell /bin/bash $LOCAL_USER \
+#	 && echo "export GIT_TRACE_PACKET=1" >> /home/$LOCAL_USER/.bashrc \
+#	 && echo "export GIT_TRACE=1" >> /home/$LOCAL_USER/.bashrc \
+#	 && echo "export GIT_CURL_VERBOSE=1" >> /home/$LOCAL_USER/.bashrc \
+#	 && echo "export PATH=\"/home/$LOCAL_USER/go/bin:\$PATH\"" >> /home/$LOCAL_USER/.bashrc \
+#	 && echo "export GOPATH=\"/home/$LOCAL_USER/go\"" >> /home/$LOCAL_USER/.bashrc \
+#	 && echo "export GOROOT=\"/usr/local/go\"" >> /home/$LOCAL_USER/.bashrc \
+#	 && mkdir -p -m 700 /home/$LOCAL_USER/.ssh/ \
+#	 && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
+#	 && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
+#	USER ${LOCAL_USER}
+#	WORKDIR /home/${LOCAL_USER}
 
 CMD ["/usr/bin/bash", "-l"]
 

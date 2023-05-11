@@ -21,7 +21,7 @@ static int write_packet(
 
 MediaDecoder::MediaDecoder(const std::string_view sdp,
                            MediaSource &source,
-                           MediaEncoder &encoder) : source_{source}, encoder_{encoder} {
+                           MediaEncoder &encoder) : encoder_{encoder} {
     int rc;
 
     input_format_context = avformat_alloc_context();
@@ -64,9 +64,5 @@ MediaDecoder::~MediaDecoder() {
 }
 
 bool MediaDecoder::on_rtp(const char *buf, size_t len) {
-    return encoder_.on_frame(buf, len);
-}
-
-bool MediaDecoder::on_rtcp(const char *buf, size_t len) {
     return encoder_.on_frame(buf, len);
 }
