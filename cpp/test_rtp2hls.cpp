@@ -13,7 +13,6 @@
 #include <archive_entry.h>
 
 #include "StreamStorage.hpp"
-#include "MediaSource.hpp"
 #include "MediaEncoder.hpp"
 #include "MediaDecoder.hpp"
 
@@ -60,10 +59,9 @@ int main(int argc, char **argv) {
             }
         }
         assert(!sdp.empty());
-        std::cerr << "SDP [" << sdp << "]" << std::endl;
-
         archive_read_free(archive_handle);
     }
+    std::cerr << "SDP [" << sdp << "]" << std::endl;
 
     {
         // 3. Open the archive to iterate on the data files
@@ -77,7 +75,6 @@ int main(int argc, char **argv) {
 
         StreamStorage storage("user", "camera");
         MediaEncoder encoder(storage);
-        ArchiveSource source(archive_handle);
         MediaDecoder decoder(sdp, encoder);
 
         // Only trigger the decoder for the RTP files
@@ -87,6 +84,7 @@ int main(int argc, char **argv) {
             if (!entry_path.ends_with (".rtp"))
                 continue;
             const size_t actual_size = archive_entry_size (entry);
+            std::cerr << "RTP " << entry_path << " size=" << actual_size << std::endl;
             assert (actual_size <= data_buf.size ());
             archive_read_data (archive_handle, data_buf.data (), data_buf.size ());
             decoder.on_rtp (data_buf.data(), actual_size);

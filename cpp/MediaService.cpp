@@ -5,49 +5,6 @@
 #include "hub.pb.h"
 #include "hub.grpc.pb.h"
 #include "MediaService.hpp"
-#include "MediaSource.hpp"
-
-class GrpcSource : public MediaSource {
-public:
-    GrpcSource() = delete;
-    explicit GrpcSource(::grpc::ServerReader<::cams::api::hub::DownstreamMediaFrame> *in) : input_{in} {}
-
-    int Read(uint8_t *buf, size_t buf_size) override {
-        ::cams::api::hub::DownstreamMediaFrame frame;
-
-        label_retry:
-        frame.Clear();
-        if (!input_->Read(&frame)) {
-            // TODO(jfs) log
-            return AVERROR_EXIT;
-        }
-        if (!frame.IsInitialized() || frame.IsInitializedWithErrors()) {
-            // TODO(jfs) log
-            return AVERROR_EXIT;
-        }
-
-        switch (frame.type()) {
-            case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_SDP:
-                return -1;
-            case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP:
-                // TODO(jfs) log
-                goto label_retry;
-            case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_RTP:
-                assert(buf_size > 0);
-                if (frame.payload().size() > (size_t) buf_size) {
-                    // TODO(jfs) log
-                    return AVERROR_BUFFER_TOO_SMALL;
-                }
-                memcpy(buf, frame.payload().data(), frame.payload().size());
-                return frame.payload().size();;
-            default:
-                // TODO(jfs) log
-                return AVERROR_BUG;
-        }
-    }
-private:
-    ::grpc::ServerReader<::cams::api::hub::DownstreamMediaFrame> *input_ = nullptr;
-};
 
 grpc::Status MediaService::MediaUpload(::grpc::ServerContext *context,
                                        ::grpc::ServerReader<::cams::api::hub::DownstreamMediaFrame> *stream,
@@ -90,10 +47,36 @@ grpc::Status MediaService::MediaUpload(::grpc::ServerContext *context,
 
     // 4. Everything is know, then prepare the pipeline
     std::string sdp(frame.payload());
+
     StreamStorage storage(userID, camID);
     MediaEncoder encoder(storage);
-    GrpcSource source(stream);
-    MediaDecoder output(sdp, source, encoder);
+    MediaDecoder output(sdp, encoder);
+
+    for (;;) {
+        frame.Clear();
+        if (!stream->Read(&frame)) {
+            // TODO(jfs) log
+            return {grpc::StatusCode::ABORTED, "read error"};;
+        }
+        if (!frame.IsInitialized() || frame.IsInitializedWithErrors()) {
+            // TODO(jfs) log
+            return {grpc::StatusCode::ABORTED, "validation error"};;
+        }
+
+        switch (frame.type()) {
+            case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_SDP:
+                return {grpc::StatusCode::ABORTED, "protocol error"};;
+            case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP:
+                // TODO(jfs) log
+                continue;
+            case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_RTP:
+                output.on_rtp(frame.payload().data(), frame.payload().size());
+                continue;
+            default:
+                // TODO(jfs) log
+                return {grpc::StatusCode::ABORTED, "protocol error"};;
+        }
+    }
 
     return {grpc::StatusCode::OK, "uploaded"};
 }
