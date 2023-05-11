@@ -27,9 +27,6 @@ public:
     bool on_rtp(const char *buf, size_t len);
 
 private:
-    // Input
-    MediaSource &source_;
-
     // Output
     MediaEncoder &encoder_;
 

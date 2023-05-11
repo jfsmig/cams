@@ -9,18 +9,9 @@
 
 // https://blog.kevmo314.com/custom-rtp-io-with-ffmpeg.html
 // https://stackoverflow.com/questions/71000853/demuxing-and-decoding-raw-rtp-with-libavformat
-
-static int read_packet(void *opaque, uint8_t *buf, int buf_size) {
-    return reinterpret_cast<MediaSource*>(opaque)->Read(buf, buf_size);
-}
-
-static int write_packet(
-        [[maybe_unused]] void *opaque,
-        [[maybe_unused]] uint8_t *buf,
-        [[maybe_unused]] int buf_size) { return -1; }
+// https://gist.github.com/jl2/1681387
 
 MediaDecoder::MediaDecoder(const std::string_view sdp,
-                           MediaSource &source,
                            MediaEncoder &encoder) : encoder_{encoder} {
     int rc;
 
@@ -41,17 +32,12 @@ MediaDecoder::MediaDecoder(const std::string_view sdp,
     rc = avformat_open_input(&input_format_context, tmppath, input_format, &input_format_opts);
     assert(rc == 0);
 
-    avio_input_context_ = avio_alloc_context(
-            readbuf_.data(), readbuf_.size(), 1,
-            &source_, &read_packet, &write_packet, nullptr);
-    avio_input_context_->direct = 1;
-    assert(avio_input_context_ != nullptr);
 
     input_format_context->pb = avio_input_context_;
     input_format_context->flags |= AVFMT_FLAG_CUSTOM_IO;
 
-    rc = avformat_open_input(&input_format_context, "/dev/null", input_format, nullptr);
-    assert(rc == 0);
+//    rc = avformat_open_input(&input_format_context, "/dev/null", input_format, nullptr);
+//    assert(rc == 0);
 
     (void) unlink(tmppath);
     (void) close(fd);
