@@ -19,6 +19,8 @@ public:
 
     bool on_fragment(const char *buf, size_t len);
 
+    void flush();
+
 private:
 };
 

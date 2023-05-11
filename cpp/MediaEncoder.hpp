@@ -2,8 +2,7 @@
 // Created by jfs on 14/01/23.
 //
 
-#ifndef CAMS_CPP_MEDIAENCODER_HPP
-#define CAMS_CPP_MEDIAENCODER_HPP
+#pragma once
 
 #include <string>
 
@@ -20,9 +19,8 @@ public:
 
     bool on_frame(const char *buf, size_t len);
 
+    void flush();
+
 private:
     StreamStorage &storage_;
 };
-
-
-#endif //CAMS_CPP_MEDIAENCODER_HPP

@@ -12,3 +12,5 @@ bool StreamStorage::on_fragment(const char *buf, size_t len) {
     (void) buf, (void) len;
     return false;
 }
+
+void StreamStorage::flush () {}

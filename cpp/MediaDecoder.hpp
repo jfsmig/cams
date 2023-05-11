@@ -2,8 +2,7 @@
 // Created by jfs on 14/01/23.
 //
 
-#ifndef CAMS_CPP_MEDIADECODER_HPP
-#define CAMS_CPP_MEDIADECODER_HPP
+#pragma once
 
 #include <array>
 #include <string>
@@ -15,20 +14,17 @@ extern "C" {
 }
 
 #include "Uncopyable.hpp"
-#include "MediaSource.hpp"
 #include "MediaEncoder.hpp"
 
 class MediaDecoder : Uncopyable {
 public:
     MediaDecoder() = delete;
 
-    MediaDecoder(const std::string_view sdp, MediaSource &source, MediaEncoder &encoder);
+    MediaDecoder(const std::string_view sdp, MediaEncoder &encoder);
 
     ~MediaDecoder();
 
     bool on_rtp(const char *buf, size_t len);
-
-    bool on_rtcp(const char *buf, size_t len);
 
 private:
     // Input
@@ -43,6 +39,3 @@ private:
     AVIOContext * avio_input_context_ = nullptr;
     std::array<uint8_t, 8192> readbuf_;
 };
-
-
-#endif //CAMS_CPP_MEDIADECODER_HPP

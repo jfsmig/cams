@@ -2,8 +2,7 @@
 // Created by jfs on 14/01/23.
 //
 
-#ifndef CAMS_CPP_MEDIASERVICE_HPP
-#define CAMS_CPP_MEDIASERVICE_HPP
+#pragma once
 
 #include <grpcpp/grpcpp.h>
 
@@ -24,5 +23,3 @@ public:
                              ::grpc::ServerReader<::cams::api::hub::DownstreamMediaFrame> *stream,
                              ::cams::api::hub::None *response) override;
 };
-
-#endif //CAMS_CPP_MEDIASERVICE_HPP

@@ -17,44 +17,6 @@
 #include "MediaEncoder.hpp"
 #include "MediaDecoder.hpp"
 
-class ArchiveSource : public MediaSource {
-public:
-    ~ArchiveSource() override = default;
-    ArchiveSource() = delete;
-    ArchiveSource(struct archive *a) : archive_handle_{a} {}
-
-    int Read(uint8_t *buf, size_t buf_size) override {
-        struct archive_entry *entry{nullptr};
-        std::cerr << __func__ << " " << __FILE__ << " +" << __LINE__<< std::endl;
-        for (;;) {
-            int rc = archive_read_next_header(archive_handle_, &entry);
-            switch (rc) {
-                case ARCHIVE_EOF:
-                    std::cerr << " at " << __LINE__<< " EOF" << std::endl;
-                    return AVERROR_EOF;
-                case ARCHIVE_OK:
-                    {
-                        size_t sz = archive_entry_size(entry);
-                        std::cerr << " at " << __LINE__<< " read " << sz << " into " << buf_size << std::endl;
-
-                        assert(sz < buf_size);
-                        std::string entry_path(archive_entry_pathname(entry));
-                        if (!entry_path.ends_with(".rtp")) {
-                            continue;
-                        }
-                        return archive_read_data(archive_handle_, buf, buf_size);
-                    }
-                default:
-                    std::cerr << " at " << __LINE__<< " ERR" << std::endl;
-                    return AVERROR_EXIT;
-            }
-        }
-    }
-
-private:
-    struct archive *archive_handle_ = nullptr;
-};
-
 #define CHECK(Expectation, Value) if (Expectation != Value) { \
     auto e = archive_errno(archive_handle); \
     std::cerr << "Expected=" << Expectation << " Got=" << Value << " errno=" << e << " " << ::strerror(e) << std::endl; \
@@ -62,8 +24,7 @@ private:
 }
 
 int main(int argc, char **argv) {
-    static std::array<char, 16384> data_buf;
-    static std::array<char, 4096> sdp_buf;
+    static std::array<char, 32768> data_buf;
 
     if (2 != argc) {
         std::cerr << "Expected PATH to the input archive\n";
@@ -92,9 +53,9 @@ int main(int argc, char **argv) {
         while (archive_read_next_header(archive_handle, &entry) == ARCHIVE_OK) {
             std::string entry_path(archive_entry_pathname(entry));
             if (entry_path.ends_with(".sdp")) {
-                assert(archive_entry_size(entry) <= sdp_buf.size());
-                archive_read_data(archive_handle, sdp_buf.data(), sdp_buf.size());
-                sdp.assign(sdp_buf.data(), archive_entry_size(entry));
+                assert(archive_entry_size(entry) <= data_buf.size());
+                archive_read_data(archive_handle, data_buf.data(), data_buf.size());
+                sdp.assign(data_buf.data(), archive_entry_size(entry));
                 break;
             }
         }
@@ -117,8 +78,21 @@ int main(int argc, char **argv) {
         StreamStorage storage("user", "camera");
         MediaEncoder encoder(storage);
         ArchiveSource source(archive_handle);
-        MediaDecoder decoder(sdp, source, encoder);
+        MediaDecoder decoder(sdp, encoder);
 
+        // Only trigger the decoder for the RTP files
+        struct archive_entry *entry{nullptr};
+        while (archive_read_next_header(archive_handle, &entry) == ARCHIVE_OK) {
+            std::string entry_path (archive_entry_pathname (entry));
+            if (!entry_path.ends_with (".rtp"))
+                continue;
+            const size_t actual_size = archive_entry_size (entry);
+            assert (actual_size <= data_buf.size ());
+            archive_read_data (archive_handle, data_buf.data (), data_buf.size ());
+            decoder.on_rtp (data_buf.data(), actual_size);
+        }
+
+        encoder.flush();
         archive_read_free(archive_handle);
     }
 
