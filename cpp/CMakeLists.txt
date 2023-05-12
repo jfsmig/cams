@@ -68,7 +68,7 @@ add_library(baselib OBJECT
         MediaDecoder.cpp MediaDecoder.hpp
         MediaEncoder.cpp MediaEncoder.hpp
         StreamStorage.cpp StreamStorage.hpp
-        Uncopyable.hpp)
+        Uncopyable.hpp RTP.hpp)
 target_link_libraries(baselib PUBLIC alldeps)
 
 add_executable(cams-rtp2hls

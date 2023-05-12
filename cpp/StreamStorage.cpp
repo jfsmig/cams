@@ -8,7 +8,7 @@ StreamStorage::StreamStorage(const std::string &user, const std::string &camera)
     (void) user, (void) camera;
 }
 
-bool StreamStorage::on_fragment(const char *buf, size_t len) {
+bool StreamStorage::on_fragment(const uint8_t *buf, size_t len) {
     (void) buf, (void) len;
     return false;
 }

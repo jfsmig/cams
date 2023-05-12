@@ -20,19 +20,17 @@ class MediaDecoder : Uncopyable {
 public:
     MediaDecoder() = delete;
 
-    MediaDecoder(const std::string_view sdp, MediaEncoder &encoder);
+    MediaDecoder(std::string_view sdp, MediaEncoder &encoder);
 
     ~MediaDecoder();
 
-    bool on_rtp(const char *buf, size_t len);
+    bool on_rtp(const uint8_t *buf, size_t len);
 
 private:
     // Output
     MediaEncoder &encoder_;
 
-    const AVInputFormat *input_format = nullptr;
-    AVFormatContext *input_format_context = nullptr;
-    AVDictionary *input_format_opts = nullptr;
-    AVIOContext * avio_input_context_ = nullptr;
-    std::array<uint8_t, 8192> readbuf_;
+    AVFormatContext *input_format_context_ = nullptr;
+    AVDictionary *input_format_opts_ = nullptr;
+    std::array<uint8_t, 32768> readbuf_;
 };
