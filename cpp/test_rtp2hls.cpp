@@ -15,6 +15,7 @@
 #include "StreamStorage.hpp"
 #include "MediaEncoder.hpp"
 #include "MediaDecoder.hpp"
+#include "RTP.hpp"
 
 #define CHECK(Expectation, Value) if (Expectation != Value) { \
     auto e = archive_errno(archive_handle); \
@@ -87,12 +88,25 @@ int main(int argc, char **argv) {
             std::cerr << "RTP " << entry_path << " size=" << actual_size << std::endl;
             assert (actual_size <= data_buf.size ());
             archive_read_data (archive_handle, data_buf.data (), data_buf.size ());
-            decoder.on_rtp (data_buf.data(), actual_size);
+            decoder.on_rtp(reinterpret_cast<uint8_t*>(data_buf.data()), actual_size);
         }
 
         encoder.flush();
         archive_read_free(archive_handle);
     }
 
+#define run(Max,Func) for (int i=0; i<Max; i++) { \
+    uint8_t x = static_cast<uint8_t>(i); \
+    fprintf(stderr, "%d -> %02x -> %02x\n", i, x, Func(x)); \
+    assert(Func(Func(x)) == x); \
+}
+
+    run(4,bitflip2);
+    run(8,bitflip3);
+    run(16,bitflip4);
+    run(32,bitflip5);
+    run(64,bitflip6);
+    run(128,bitflip7);
+    run(256,bitflip8);
     return 0;
 }

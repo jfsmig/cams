@@ -32,5 +32,9 @@ private:
 
     AVFormatContext *input_format_context_ = nullptr;
     AVDictionary *input_format_opts_ = nullptr;
+    AVCodecContext *video_codec_ctx_ = nullptr;
+    AVCodecContext *audio_codec_ctx_ = nullptr;
+    AVFrame *frame_in_ = nullptr;
+    AVFrame *frame_out_ = nullptr;
     std::array<uint8_t, 32768> readbuf_;
 };
