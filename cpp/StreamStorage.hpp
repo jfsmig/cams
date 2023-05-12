@@ -17,7 +17,7 @@ public:
 
     StreamStorage(const std::string &user, const std::string &camera);
 
-    bool on_fragment(const char *buf, size_t len);
+    bool on_fragment(const uint8_t *buf, size_t len);
 
     void flush();
 

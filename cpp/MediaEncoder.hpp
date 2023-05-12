@@ -17,7 +17,7 @@ public:
 
     explicit MediaEncoder(StreamStorage &storage);
 
-    bool on_frame(const char *buf, size_t len);
+    bool on_frame(const uint8_t *buf, size_t len);
 
     void flush();
 
