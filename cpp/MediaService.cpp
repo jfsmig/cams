@@ -70,7 +70,7 @@ grpc::Status MediaService::MediaUpload(::grpc::ServerContext *context,
                 // TODO(jfs) log
                 continue;
             case ::cams::api::hub::DownstreamMediaFrameType::DOWNSTREAM_MEDIA_FRAME_TYPE_RTP:
-                output.on_rtp(frame.payload().data(), frame.payload().size());
+                output.on_rtp(reinterpret_cast<const uint8_t*>(frame.payload().data()), frame.payload().size());
                 continue;
             default:
                 // TODO(jfs) log
