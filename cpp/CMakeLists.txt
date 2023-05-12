@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 project(cams-cpp)
 
 set(CMAKE_CXX_STANDARD 20)
+enable_testing()
+
 find_package(PkgConfig)
 find_package (Threads)
 
@@ -68,15 +70,27 @@ add_library(baselib OBJECT
         MediaDecoder.cpp MediaDecoder.hpp
         MediaEncoder.cpp MediaEncoder.hpp
         StreamStorage.cpp StreamStorage.hpp
-        Uncopyable.hpp RTP.hpp)
+        Uncopyable.hpp RTP.hpp bits.hpp)
 target_link_libraries(baselib PUBLIC alldeps)
 
 add_executable(cams-rtp2hls
         MediaService.cpp MediaService.hpp
         rtp2hls.cpp)
-target_link_libraries(cams-rtp2hls alldeps baselib)
+target_link_libraries(cams-rtp2hls
+        alldeps baselib)
 
 add_executable(test-rtp2hls
         test_rtp2hls.cpp)
-target_link_libraries(test-rtp2hls alldeps baselib
+target_link_libraries(test-rtp2hls
+        alldeps baselib
         ${ARCHIVE_LIBRARIES})
+
+add_executable(test-bits
+        test_bits.cpp)
+
+add_test(NAME "bits"
+        COMMAND ./test-bits
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+add_test(NAME "rtp2hls"
+        COMMAND ./test-rtp2hls ${CMAKE_SOURCE_DIR}/../cams-capture-879216526.tar
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
