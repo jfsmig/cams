@@ -8,6 +8,7 @@
 
 #include "Uncopyable.hpp"
 #include "StreamStorage.hpp"
+#include "RTP.hpp"
 
 class MediaEncoder : Uncopyable {
 public:
@@ -17,7 +18,7 @@ public:
 
     explicit MediaEncoder(StreamStorage &storage);
 
-    bool on_frame(const uint8_t *buf, size_t len);
+    bool on_frame(const RtpPacket &);
 
     void flush();
 

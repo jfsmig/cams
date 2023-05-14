@@ -3,8 +3,6 @@
 //
 
 #include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 
 #include <iostream>
 #include <cassert>
@@ -15,7 +13,6 @@
 #include "StreamStorage.hpp"
 #include "MediaEncoder.hpp"
 #include "MediaDecoder.hpp"
-#include "RTP.hpp"
 
 #define CHECK(Expectation, Value) if (Expectation != Value) { \
     auto e = archive_errno(archive_handle); \
@@ -80,14 +77,17 @@ int main(int argc, char **argv) {
 
         // Only trigger the decoder for the RTP files
         struct archive_entry *entry{nullptr};
+        int i=0;
         while (archive_read_next_header(archive_handle, &entry) == ARCHIVE_OK) {
+            if (i++ > 10) break;
             std::string entry_path (archive_entry_pathname (entry));
             if (!entry_path.ends_with (".rtp"))
                 continue;
             const size_t actual_size = archive_entry_size (entry);
             std::cerr << "RTP " << entry_path << " size=" << actual_size << std::endl;
             assert (actual_size <= data_buf.size ());
-            archive_read_data (archive_handle, data_buf.data (), data_buf.size ());
+            auto r = archive_read_data (archive_handle, data_buf.data (), data_buf.size ());
+            assert(r == actual_size);
             decoder.on_rtp(reinterpret_cast<uint8_t*>(data_buf.data()), actual_size);
         }
 

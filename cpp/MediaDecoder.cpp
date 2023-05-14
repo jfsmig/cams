@@ -6,8 +6,10 @@
 
 #include <cassert>
 #include <iostream>
+#include <list>
 
 #include "RTP.hpp"
+#include "NALU.hpp"
 
 // https://blog.kevmo314.com/custom-rtp-io-with-ffmpeg.html
 // https://stackoverflow.com/questions/71000853/demuxing-and-decoding-raw-rtp-with-libavformat
@@ -59,21 +61,86 @@ MediaDecoder::~MediaDecoder() {
 }
 
 bool MediaDecoder::on_rtp(const uint8_t *buf, size_t len) {
-    auto header = RtpHeader<1>::parse(buf);
-
-    ::fprintf(stderr, "  Header:"
-                " v=%01x padding=%01x ext=%01x crsrc_count=%01x"
+    auto pkt = RtpPacket::parse(buf, len);
+#if 0
+    ::fprintf(stderr,"  Header:"
+             " v=%01x padding=%01x ext=%01x crsrc_count=%01x"
              " marker=%01x payload_type=%01x"
              " sequence_number=%02x timestamp=%04x ssrc_id=%04x\n",
-             header.header.version,
-             header.header.padding,
-             header.header.extension,
-             header.header.crsc_count,
-             header.header.marker,
-             header.header.payload_type,
-             header.header.sequence_number,
-             header.header.timestamp,
-             header.header.ssrc_id);
+             pkt.header.version,
+             pkt.header.padding,
+             pkt.header.extension,
+             pkt.header.crsc_count,
+             pkt.header.marker,
+             pkt.header.payload_type,
+             pkt.header.sequence_number,
+             pkt.header.timestamp,
+             pkt.header.ssrc_id);
+    for (int i=0; i<pkt.header.crsc_count; i++)
+        ::fprintf(stderr, "  CSRC: %04x\n", pkt.csrc_id[i]);
+    if (pkt.header.extension)
+        ::fprintf(stderr, "  EXT: id=%02x length=%02x\n",
+                  pkt.extension.preamble.id, pkt.extension.preamble.length);
 
-    return encoder_.on_frame(buf, len);
+    ::fprintf(stderr, "  DATA:\n");
+    hex(pkt.payload, 32);
+
+    ::fprintf(stderr, " FRAME:\n");
+    hex(buf, len);
+#endif
+
+    if (pkt.payload_size <= 2)
+        return false;
+
+    // what is expected
+    enum nal_parsing_state {DELIM_1ST = 0, DELIM_2ND, DELIM_3RD, DELIM_ONE};
+    nal_parsing_state state = DELIM_1ST;
+
+    std::list<NALU> nalus;
+    const uint8_t *start = pkt.payload;
+    const uint8_t *p = pkt.payload;
+    for (size_t l=0; l<pkt.payload_size; l++) {
+        switch (*p) {
+            case 0:
+                switch (state) {
+                    case DELIM_1ST:
+                        state = DELIM_2ND;
+                        continue;
+                    case DELIM_2ND:
+                        state = DELIM_3RD;
+                        continue;
+                    case DELIM_3RD:
+                        state = DELIM_ONE;
+                        continue;
+                    case DELIM_ONE:
+                        state = DELIM_ONE;
+                        continue;
+                }
+                break;
+            case 0x01:
+                switch (state) {
+                    case DELIM_1ST:
+                        state = DELIM_1ST;
+                        continue;
+                    case DELIM_2ND:
+                        state = DELIM_1ST;
+                        continue;
+                    case DELIM_3RD:
+                        state = DELIM_1ST;
+                        continue;
+                    case DELIM_ONE:
+                        // NEW!
+                        state = DELIM_1ST;
+                        continue
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    for (auto &nalu : nalus) {
+        // encoder_.on_frame(frame);
+    }
+    return false;
 }

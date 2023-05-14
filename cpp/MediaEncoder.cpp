@@ -6,7 +6,7 @@
 
 MediaEncoder::MediaEncoder(StreamStorage &storage) : storage_{storage} {}
 
-bool MediaEncoder::on_frame(const uint8_t *buf, size_t len) {
+bool MediaEncoder::on_frame(const RtpPacket &pkt) {
     return storage_.on_fragment(buf, len);
 }
 
