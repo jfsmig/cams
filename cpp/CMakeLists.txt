@@ -70,7 +70,7 @@ add_library(baselib OBJECT
         MediaDecoder.cpp MediaDecoder.hpp
         MediaEncoder.cpp MediaEncoder.hpp
         StreamStorage.cpp StreamStorage.hpp
-        Uncopyable.hpp RTP.hpp bits.hpp)
+        Uncopyable.hpp RTP.hpp bits.hpp NALU.hpp)
 target_link_libraries(baselib PUBLIC alldeps)
 
 add_executable(cams-rtp2hls
@@ -88,9 +88,5 @@ target_link_libraries(test-rtp2hls
 add_executable(test-bits
         test_bits.cpp)
 
-add_test(NAME "bits"
-        COMMAND ./test-bits
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-add_test(NAME "rtp2hls"
-        COMMAND ./test-rtp2hls ${CMAKE_SOURCE_DIR}/../cams-capture-879216526.tar
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+add_test("bits" ${CMAKE_CURRENT_BINARY_DIR}/test-bits)
+add_test("rtp2hls" ${CMAKE_CURRENT_BINARY_DIR}/test-rtp2hls ${CMAKE_SOURCE_DIR}/../cams-capture-879216526.tar)
