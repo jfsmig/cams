@@ -43,7 +43,9 @@ uint8_t bitflip7(uint8_t x) { return bitflip8(x) >> 1; }
 // 4 ops
 uint8_t bitflip8(uint8_t x) { return (bitflip4(x & 0x0F) << 4) | bitflip4((x & 0xF0) >> 4); }
 
-static void hex(const uint8_t* buf, const size_t len, const size_t MAX = 64) {
+static inline void hex(const uint8_t* buf, const size_t len, const size_t MAX = 64);
+
+void hex(const uint8_t* buf, const size_t len, const size_t MAX) {
     for (size_t i=0; i < len && i < MAX;) {
         for (size_t k=0; i < len && k<4; k++, i++) {
             ::fprintf(stderr, "%02x", buf[i]);

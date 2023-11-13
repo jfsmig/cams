@@ -10,6 +10,10 @@
 #include "StreamStorage.hpp"
 #include "RTP.hpp"
 
+struct MediaFrame {
+    uint32_t plop;
+};
+
 class MediaEncoder : Uncopyable {
 public:
     ~MediaEncoder() = default;
@@ -18,7 +22,7 @@ public:
 
     explicit MediaEncoder(StreamStorage &storage);
 
-    bool on_frame(const RtpPacket &);
+    bool on_frame(const MediaFrame &);
 
     void flush();
 

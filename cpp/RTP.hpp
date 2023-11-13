@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cassert>
 
 #include "bits.hpp"
 
@@ -24,7 +25,9 @@ struct RtpHeader {
     uint32_t timestamp = 0U;
     uint32_t ssrc_id = 0U;
 
-    size_t parse(const uint8_t *buf, size_t len) {
+    std::size_t parse(const uint8_t *buf, std::size_t len) {
+        assert(len > sizeof(*this));
+
         // byte 0
         version = (buf[0] >> 6) & 0x03;
         padding = (buf[0] >> 5) & 0x01;
@@ -48,7 +51,9 @@ struct RtpHeaderExtension {
     } preamble;
     const uint8_t *data = nullptr;
 
-    size_t parse(const uint8_t *buf, size_t len) {
+    std::size_t parse(const uint8_t *buf, std::size_t len) {
+        assert(len >= sizeof(Preamble));
+
         preamble.id = *reinterpret_cast<const uint16_t *>(buf);
         preamble.length = ntohs(*reinterpret_cast<const uint16_t *>(buf + 2));
         if (preamble.length > 0) {
@@ -65,12 +70,12 @@ struct RtpPacket {
     RtpHeader header;
     RtpHeaderExtension extension;
     const uint8_t *payload = nullptr;
-    size_t payload_size = 0;
+    std::size_t payload_size = 0;
     uint32_t csrc_id[16] = {0};
 
-    static RtpPacket parse(const uint8_t *buf, size_t len) {
+    static RtpPacket parse(const uint8_t *buf, std::size_t len) {
         RtpPacket pkt;
-        size_t consumed;
+        std::size_t consumed;
 
         consumed = pkt.header.parse(buf, len);
         buf += consumed, len -= consumed;
