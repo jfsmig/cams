@@ -4,12 +4,14 @@
 
 #include "MediaDecoder.hpp"
 
+#include <cstdio>
 #include <cassert>
-#include <iostream>
+
 #include <list>
+#include <iostream>
 
 #include "RTP.hpp"
-#include "NALU.hpp"
+#include "NAL.hpp"
 
 // https://blog.kevmo314.com/custom-rtp-io-with-ffmpeg.html
 // https://stackoverflow.com/questions/71000853/demuxing-and-decoding-raw-rtp-with-libavformat
@@ -88,59 +90,20 @@ bool MediaDecoder::on_rtp(const uint8_t *buf, size_t len) {
     ::fprintf(stderr, " FRAME:\n");
     hex(buf, len);
 #endif
-
     if (pkt.payload_size <= 2)
         return false;
 
-    // what is expected
-    enum nal_parsing_state {DELIM_1ST = 0, DELIM_2ND, DELIM_3RD, DELIM_ONE};
-    nal_parsing_state state = DELIM_1ST;
-
-    std::list<NALU> nalus;
-    const uint8_t *start = pkt.payload;
-    const uint8_t *p = pkt.payload;
-    for (size_t l=0; l<pkt.payload_size; l++) {
-        switch (*p) {
-            case 0:
-                switch (state) {
-                    case DELIM_1ST:
-                        state = DELIM_2ND;
-                        continue;
-                    case DELIM_2ND:
-                        state = DELIM_3RD;
-                        continue;
-                    case DELIM_3RD:
-                        state = DELIM_ONE;
-                        continue;
-                    case DELIM_ONE:
-                        state = DELIM_ONE;
-                        continue;
-                }
-                break;
-            case 0x01:
-                switch (state) {
-                    case DELIM_1ST:
-                        state = DELIM_1ST;
-                        continue;
-                    case DELIM_2ND:
-                        state = DELIM_1ST;
-                        continue;
-                    case DELIM_3RD:
-                        state = DELIM_1ST;
-                        continue;
-                    case DELIM_ONE:
-                        // NEW!
-                        state = DELIM_1ST;
-                        continue
-                }
-                break;
-            default:
-                break;
-        }
+    auto nalus = parse_train(pkt.payload, pkt.payload_size);
+    for (const auto &nalu: nalus) {
+        ::fprintf(stderr, "  NALU: forbidden=%01x idc=%01x type=%02x length=%lu",
+                  nalu.header.forbidden,
+                  nalu.header.idc,
+                  nalu.header.type,
+                  nalu.length);
+        // TODO(jfs): extract the frames from the decode once fed with the NALU
+        MediaFrame frame;
+        if (!encoder_.on_frame(frame))
+            return false;
     }
-
-    for (auto &nalu : nalus) {
-        // encoder_.on_frame(frame);
-    }
-    return false;
+    return true;
 }

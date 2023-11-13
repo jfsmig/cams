@@ -37,7 +37,7 @@ func main() {
 
 	cmdCam := &cobra.Command{
 		Use:   "cam",
-		Short: "Commands targetting a camera",
+		Short: "Commands targeting a camera",
 	}
 
 	cmdCamPlay := &cobra.Command{

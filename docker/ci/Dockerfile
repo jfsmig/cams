@@ -1,12 +1,12 @@
 ARG UBUNTU_VERSION=22.04
 
-FROM ubuntu:${UBUNTU_VERSION} AS stage0
+FROM ubuntu:${UBUNTU_VERSION} AS cams-dev
 
 USER 0
 LABEL \
     maintainer="jf.smigielski@gmail.com" \
     version="0.1" \
-    description="cams CI image, packed with all the deps"
+    description="Cams CI image, packed with all the build dependencies"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -112,7 +112,7 @@ RUN set -ex \
  && cd - \
  && rm -rf CMake
 
-ARG GRPC_VERSION=v1.52.2
+ARG GRPC_VERSION=v1.59.0
 RUN set -ex \
  && git clone https://github.com/grpc/grpc.git \
  && cd grpc \
@@ -124,7 +124,7 @@ RUN set -ex \
  && cd - \
  && rm -rf grpc
 
-ARG GO_VERSION=1.20.4
+ARG GO_VERSION=1.21.4
 ARG GO_URL=https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
 RUN set -ex\
  && curl  -K - -SL ${GO_URL} -o /tmp/go.linux-amd64.tar.gz \
@@ -140,9 +140,10 @@ RUN set -ex \
  && export GOBIN=/usr/bin \
  && /usr/bin/go install golang.org/x/tools/cmd/goimports@latest \
  && /usr/bin/go install golang.org/x/tools/cmd/stringer@latest \
- && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest \
- && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1 \
- && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+ && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest 
+
+# && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1 \
+# && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
 
 ARG LOCAL_USER=dev
 ENV GOPATH=/home/$LOCAL_USER/go GOROOT=/usr/local/go
