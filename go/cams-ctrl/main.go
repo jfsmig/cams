@@ -93,37 +93,63 @@ func runHub(ctx context.Context, config utils.ServerConfig) error {
 
 	utils.Logger.Info().Str("action", "start").Msg("hub")
 
-	var server *grpc.Server
+	// Create the gRPC context
+	var serverCtrl, serverStream *grpc.Server
 	var err error
 
 	if len(config.PathCrt) <= 0 || len(config.PathKey) <= 0 {
-		server, err = hub.config.ServeInsecure()
+		serverCtrl, err = hub.config.ServeInsecure()
 	} else {
-		server, err = hub.config.ServeTLS()
+		serverCtrl, err = hub.config.ServeTLS()
 	}
 	if err != nil {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", hub.config.ListenAddr)
+	if len(config.PathCrt) <= 0 || len(config.PathKey) <= 0 {
+		serverStream, err = hub.config.ServeInsecure()
+	} else {
+		serverStream, err = hub.config.ServeTLS()
+	}
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
 
+	// Create the TCP context
+	listenerCtrl, err := net.Listen("tcp", hub.config.ListenAddr)
+	if err != nil {
+		return err
+	}
+	defer listenerCtrl.Close()
+
+	listenerStream, err := net.Listen("tcp", hub.config.ListenAddr)
+	if err != nil {
+		return err
+	}
+	defer listenerCtrl.Close()
+
+	// Ready to roll!
 	utils.SwarmRun(ctx,
 		func(c context.Context) {
 			<-c.Done()
 			utils.Logger.Info().Str("action", "kill").Msg("hub")
-			server.GracefulStop()
+			serverCtrl.GracefulStop()
+			serverStream.GracefulStop()
 		},
 		func(c context.Context) {
-			pb.RegisterRegistrarServer(server, hub)
-			pb.RegisterControllerServer(server, hub)
-			pb.RegisterViewerServer(server, hub)
+			pb.RegisterRegistrarServer(serverCtrl, hub)
+			pb.RegisterControllerServer(serverCtrl, hub)
+			pb.RegisterViewerServer(serverCtrl, hub)
 			hub.registrar = NewRegistrarInMem()
-			if err := server.Serve(listener); err != nil {
-				utils.Logger.Warn().Err(err).Msg("grpc")
+			if err := serverCtrl.Serve(listenerCtrl); err != nil {
+				utils.Logger.Warn().Err(err).Msg("controller error")
+			}
+		},
+		func(c context.Context) {
+			pb.RegisterUploaderServer(serverStream, hub)
+			hub.registrar = NewRegistrarInMem()
+			if err := serverStream.Serve(listenerStream); err != nil {
+				utils.Logger.Warn().Err(err).Msg("upload error")
 			}
 		},
 	)
