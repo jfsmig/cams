@@ -17,7 +17,6 @@ package utils
 
 import (
 	"context"
-	"github.com/juju/errors"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -27,12 +26,31 @@ import (
 	"time"
 )
 
+// stderrIsTerminal reports whether the logs are going to a screen.
+//
+// zerolog's ConsoleWriter colours unconditionally, so a redirected or piped log
+// carries the ANSI escapes into whatever reads it: `cams-hls --help 2>log`
+// wrote "\x1b[32mINF\x1b[0m" into the file. The colour is for an operator
+// watching, and nobody else.
+//
+// A character device is not strictly a terminal -- /dev/null is one too -- but
+// the only cost of that confusion is escapes nobody reads, and it keeps this
+// free of a dependency.
+func stderrIsTerminal() bool {
+	fi, err := os.Stderr.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
 var (
 	// LoggerContext is the builder of a zerolog.Logger that is exposed to the application so that
 	// options at the CLI might alter the formatting and the output of the logs.
 	LoggerContext = zerolog.
 			New(zerolog.ConsoleWriter{
 			Out: os.Stderr, TimeFormat: time.RFC3339,
+			NoColor: !stderrIsTerminal(),
 		}).With().Timestamp()
 
 	// Logger is a zerolog logger, that can be safely used from any part of the application.
@@ -68,7 +86,7 @@ func (evt *logEvt) patchWithRequest(ctx context.Context) *logEvt {
 		if len(auth) > 0 {
 			evt.z.Str("local", auth[0])
 		}
-		sessionID := md.Get("session-id")
+		sessionID := md.Get(KeySession)
 		if len(sessionID) > 0 {
 			evt.z.Str("session", sessionID[0])
 		}
@@ -93,14 +111,22 @@ func NewStreamServerInterceptorZerolog() grpc.StreamServerInterceptor {
 		err := handler(srv, ss)
 		ctx := ss.Context()
 		evt.setResult(err).patchWithRequest(ctx).pathWithReply(ctx).send()
-		return errors.Trace(err)
+		// Returned bare. An interceptor must not rewrap the handler's error:
+		// wrapping it costs the gRPC status, because grpc then rebuilds the
+		// status from the message and the client gets an annotation chain
+		// where the handler's own text should be. The unary interceptor below
+		// already had this right.
+		return err
 	}
 }
 
 func NewUnaryServerInterceptorZerolog() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		evt := newEvent(info.FullMethod)
-		evt.z.Interface("req", req)
+		// The request body is deliberately not logged. It was, by reflection,
+		// at debug level: that put an account identifier on every registration
+		// into the log, and would put a credential there the moment a request
+		// message grows one.
 		resp, err := handler(ctx, req)
 		evt.setResult(err).patchWithRequest(ctx).pathWithReply(ctx).send()
 		return resp, err

@@ -1,0 +1,64 @@
+# Copyright (c) 2022-2024 The authors (see the AUTHORS file)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A second push to the same branch cancels the first: nothing here is worth
+# queueing behind an obsolete run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# The checks themselves live in ci/, shared with .circleci/config.yml, and both
+# systems run them in the same image — so green here implies green there. The
+# toolchain therefore comes from docker/ci/Dockerfile and not from
+# actions/setup-go, which removes the need to keep a Go version pinned in two
+# places.
+#
+# --user root because the image ends on an unprivileged USER, which
+# actions/checkout cannot write the workspace as.
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: jfsmig/cams-ci:latest
+      options: --user root
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./ci/go.sh
+
+  cpp:
+    name: C++
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: jfsmig/cams-ci:latest
+      options: --user root
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./ci/cpp.sh

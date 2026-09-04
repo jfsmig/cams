@@ -5,3 +5,15 @@
 
 **/cmake-build-*
 
+
+### Binaries left behind by `go build ./...` run from go/
+/go/cams-agent
+/go/cams-cli
+/go/cams-ctrl
+
+
+### Out-of-source C++ build tree, and the gRPC codec generated into it
+/cpp/build/
+
+### Claude Code, per-machine
+.claude/settings.local.json

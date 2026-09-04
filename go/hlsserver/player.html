@@ -1,0 +1,177 @@
+<!doctype html>
+<!--
+Copyright (c) 2022-2024 The authors (see the AUTHORS file)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cams</title>
+
+<!--
+  A demonstration page, not a product frontend. It exists to prove the media
+  path reaches a browser, and it reports how long that took, because the number
+  is the only way to know whether plain HLS is good enough for the event
+  workflow or whether the low-latency work has to happen.
+
+  hls.js is loaded from a CDN with a pinned version and an integrity hash
+  rather than vendored: four hundred kilobytes of third-party minified
+  JavaScript is a larger commitment than a demonstration warrants, and one line
+  is easy to repoint at a local copy when an airgap needs it. Safari does not
+  need it at all -- it plays HLS natively, and it is the only browser that
+  plays the H.265 the hub carries for cameras that offer nothing else.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.17/hls.min.js"
+        integrity="sha384-9v3HcdYrO3D+OPDTjZ40RXocgE4GtXVCd3/mCS62JsM93JXgI1afJVuwjFvsu6ni"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"></script>
+
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; padding: 1.5rem; font: 14px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 1rem; font-weight: 600; margin: 0 0 1rem; }
+  video { width: 100%; max-width: 60rem; background: #000; aspect-ratio: 16/9; }
+  .bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .75rem 0; }
+  select, button { font: inherit; padding: .3rem .6rem; }
+  #note { opacity: .75; }
+  #note b { font-variant-numeric: tabular-nums; }
+  .warn { color: #b00; }
+</style>
+
+<h1>cams &mdash; stored fragments</h1>
+
+<div class="bar">
+  <select id="pick"><option value="">loading&hellip;</option></select>
+  <button id="go">watch</button>
+  <button id="live" title="Seek to the live edge of the retained window">back to live</button>
+</div>
+
+<video id="v" controls playsinline></video>
+
+<p id="note"></p>
+
+<script>
+"use strict";
+
+const video = document.getElementById("v");
+const pick = document.getElementById("pick");
+const note = document.getElementById("note");
+let hls = null;
+let asked = 0;
+
+function say(text, warn) {
+  note.innerHTML = text;
+  note.className = warn ? "warn" : "";
+}
+
+function playlistURL(user, camera) {
+  return "/hls/" + encodeURIComponent(user) + "/" +
+         encodeURIComponent(camera) + "/stream.m3u8";
+}
+
+// Native HLS first. Safari has it, including on iOS, and it is the only path
+// that plays HEVC -- so preferring it is not merely about avoiding a
+// dependency.
+function nativeHLS() {
+  return video.canPlayType("application/vnd.apple.mpegurl") !== "";
+}
+
+function watch(user, camera) {
+  const url = playlistURL(user, camera);
+  history.replaceState(null, "", "/watch/" + encodeURIComponent(user) + "/" +
+                                 encodeURIComponent(camera));
+
+  if (hls) { hls.destroy(); hls = null; }
+  // Measured from here rather than from navigation: this is the click, and the
+  // interval to the first frame is what a viewer experiences.
+  asked = performance.now();
+
+  if (nativeHLS()) {
+    say("native HLS &mdash; waiting for the first fragment&hellip;");
+    video.src = url;
+    video.play().catch(() => {});
+    return;
+  }
+  if (window.Hls && window.Hls.isSupported()) {
+    say("hls.js &mdash; waiting for the first fragment&hellip;");
+    hls = new window.Hls();
+    hls.on(window.Hls.Events.ERROR, (_, data) => {
+      if (data.fatal) { say("hls.js: " + data.details, true); }
+    });
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    video.play().catch(() => {});
+    return;
+  }
+  say("This browser has neither native HLS nor hls.js. If the page was loaded " +
+      "offline, the CDN script did not arrive; vendor hls.js or use Safari.", true);
+}
+
+video.addEventListener("playing", () => {
+  const ms = Math.round(performance.now() - asked);
+  const how = nativeHLS() ? "native HLS" : "hls.js";
+  say(how + " &mdash; click to picture <b>" + (ms / 1000).toFixed(2) + " s</b>");
+}, { once: false });
+
+video.addEventListener("error", () => {
+  say("The browser could not play the stream. If the camera is H.265, only " +
+      "Safari and a Chrome with hardware decode will.", true);
+});
+
+document.getElementById("go").addEventListener("click", () => {
+  if (!pick.value) { return; }
+  const [user, camera] = JSON.parse(pick.value);
+  watch(user, camera);
+});
+
+// The retained window is a DVR: what the hub still holds can be seeked, and
+// this is the way back to the edge of it.
+document.getElementById("live").addEventListener("click", () => {
+  const ranges = video.seekable;
+  if (!ranges.length) { return; }
+  video.currentTime = ranges.end(ranges.length - 1);
+  video.play().catch(() => {});
+});
+
+// Which camera, if the URL already says.
+function fromPath() {
+  const m = location.pathname.match(/^\/watch\/([^/]+)\/([^/]+)\/?$/);
+  return m ? [decodeURIComponent(m[1]), decodeURIComponent(m[2])] : null;
+}
+
+fetch("/streams")
+  .then((r) => r.json())
+  .then((list) => {
+    pick.innerHTML = "";
+    if (!list.length) {
+      pick.innerHTML = "<option value=''>no stream on this hub yet</option>";
+      say("Nothing under the hub's root. Start a camera: <code>cams hub play " +
+          "&lt;user&gt; &lt;camera&gt;</code>");
+      return;
+    }
+    for (const s of list) {
+      const opt = document.createElement("option");
+      opt.value = JSON.stringify([s.user, s.camera]);
+      opt.textContent = s.user + " / " + s.camera +
+                        (s.playlist ? "" : "  (never streamed)");
+      pick.appendChild(opt);
+    }
+    const want = fromPath();
+    if (want) {
+      pick.value = JSON.stringify(want);
+      watch(want[0], want[1]);
+    }
+  })
+  .catch(() => say("Could not read /streams.", true));
+</script>

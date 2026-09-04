@@ -24,7 +24,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"io/ioutil"
+	"time"
 )
 
 type ServerConfig struct {
@@ -65,21 +67,37 @@ func (srv *ServerConfig) ServeTLS() (*grpc.Server, error) {
 
 	return grpc.NewServer(
 		grpc.Creds(credentials.NewServerTLSFromCert(&cert)),
+		grpc.KeepaliveParams(keepaliveServer),
+		grpc.KeepaliveEnforcementPolicy(keepalivePolicy),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			//grpc_prometheus.UnaryServerInterceptor,
 			NewUnaryServerInterceptorZerolog())),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			//grpc_prometheus.StreamServerInterceptor,
 			NewStreamServerInterceptorZerolog()))), nil
+}
+
+// keepaliveServer lets the hub notice an agent that has gone away without
+// saying so, which is the mirror of the client-side problem: a control stream
+// is idle most of the time, so nothing else would reveal it.
+var keepaliveServer = keepalive.ServerParameters{
+	Time:    30 * time.Second,
+	Timeout: 10 * time.Second,
+}
+
+// keepalivePolicy has to admit the pings the agents send. The gRPC default
+// refuses a ping from a client with no active stream and answers with GOAWAY,
+// which would turn the client keepalive above into a reconnect loop.
+var keepalivePolicy = keepalive.EnforcementPolicy{
+	MinTime:             15 * time.Second,
+	PermitWithoutStream: true,
 }
 
 func (srv *ServerConfig) ServeInsecure() (*grpc.Server, error) {
 	return grpc.NewServer(
+		grpc.KeepaliveParams(keepaliveServer),
+		grpc.KeepaliveEnforcementPolicy(keepalivePolicy),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			//grpc_prometheus.UnaryServerInterceptor,
 			NewUnaryServerInterceptorZerolog())),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-			//grpc_prometheus.StreamServerInterceptor,
 			NewStreamServerInterceptorZerolog()))), nil
 }
 
@@ -87,31 +105,26 @@ func DialTLS(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
 	return nil, errors.NotImplemented
 }
 
+// keepaliveClient makes gRPC prove the peer is still there.
+//
+// This is not a nicety. The upstream agent's whole reconnect logic hangs off
+// stream.Recv returning an error, and the hub sends nothing on the control
+// stream unless a viewer asks for a camera -- so an idle stream carries no
+// traffic at all. Without a keepalive, a NAT between an agent and the hub drops
+// the connection after its idle timeout, nobody is told, Recv parks forever,
+// and the agent is a zombie that still reports its link as up.
+//
+// PermitWithoutStream is on because the interesting case is exactly the one
+// where no RPC is in flight.
+var keepaliveClient = keepalive.ClientParameters{
+	Time:                30 * time.Second,
+	Timeout:             10 * time.Second,
+	PermitWithoutStream: true,
+}
+
 func DialInsecure(ctx context.Context, endpoint string) (*grpc.ClientConn, error) {
-	//Logger.Info().Str("action", "dial").Str("addr", endpoint).Msg("grpc")
-	//config := &tls.Config{InsecureSkipVerify: true,}
-	/*
-		options := []grpc_retry.CallOption{
-			grpc_retry.WithCodes(codes.Unavailable),
-			grpc_retry.WithBackoff(
-				grpc_retry.BackoffExponentialWithJitter(250*time.Millisecond, 0.1),
-			),
-			grpc_retry.WithMax(5),
-			grpc_retry.WithPerRetryTimeout(1 * time.Second),
-		}
-	*/
 	return grpc.DialContext(ctx, endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		//grpc.WithTransportCredentials(credentials.NewTLS(config)),
-		grpc.WithUnaryInterceptor(
-			grpc_middleware.ChainUnaryClient(
-			//grpc_prometheus.UnaryClientInterceptor,
-			//grpc_retry.UnaryClientInterceptor(options...),
-			)),
-		grpc.WithStreamInterceptor(
-			grpc_middleware.ChainStreamClient(
-			//grpc_prometheus.StreamClientInterceptor,
-			//grpc_retry.StreamClientInterceptor(options...),
-			)),
+		grpc.WithKeepaliveParams(keepaliveClient),
 	)
 }

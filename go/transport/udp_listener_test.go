@@ -22,7 +22,7 @@ import (
 )
 
 func TestUdpListener_doubleOps(t *testing.T) {
-	ul := UdpListener{}
+	ul := rawUdpListener{}
 	if err := ul.OpenRandom("0.0.0.0"); err != nil {
 		t.Fatal(err)
 	}
@@ -36,8 +36,8 @@ func TestUdpListener_doubleOps(t *testing.T) {
 	ul.Close()
 
 	// open must succeed after a close
-	if err := ul.OpenRandom("0.0.0.0"); err == nil {
-		t.Fatal("unexpected success")
+	if err := ul.OpenRandom("0.0.0.0"); err != nil {
+		t.Fatal(err)
 	}
 	defer ul.Close()
 	// double open must still fail
@@ -47,7 +47,7 @@ func TestUdpListener_doubleOps(t *testing.T) {
 }
 
 func TestUdpListener_OpenRandom(t *testing.T) {
-	ul := UdpListener{}
+	ul := rawUdpListener{}
 	if err := ul.OpenRandom("0.0.0.0"); err != nil {
 		t.Fatal(err)
 	}
@@ -60,13 +60,10 @@ func TestUdpListener_OpenRandom(t *testing.T) {
 		t.Fatal("no control port")
 	}
 
-	outMedia := make(chan []byte, 1)
-	outControl := make(chan []byte, 1)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		return ul.Run(ctx, outMedia, outControl)
+		return ul.Run(ctx)
 	})
 	cancel()
 

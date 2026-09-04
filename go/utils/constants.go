@@ -18,4 +18,9 @@ package utils
 const (
 	KeyUser   string = "user"
 	KeyStream        = "stream"
+
+	// KeySession carries utils.SessionID, the join column between the logs of
+	// the agent, the control plane and the data plane. The hub's logging
+	// interceptor reads it; see session.go.
+	KeySession = "session-id"
 )

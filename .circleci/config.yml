@@ -1,21 +1,45 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
+# Copyright (c) 2022-2024 The authors (see the AUTHORS file)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 # See: https://circleci.com/docs/2.0/configuration-reference
+#
+# The checks themselves live in ci/, shared with .github/workflows/ci.yml, so
+# that the two CI systems cannot drift apart. Both run them in the same image.
 version: 2.1
 
 jobs:
-  build-and-test:
+  go:
     docker:
       - image: jfsmig/cams-ci:latest
     steps:
       - checkout
-      - run: cd go && go mod download
-      - run: cd go && go generate ./... && git diff --quiet --exit-code
-      - run: cd go && go vet ./...
-      - run: cd go && go install ./...
-      - run: cd go && go test ./...
-      - run: cd cpp && cmake . && make -j $(nproc --ignore=1)
+      - run:
+          name: Go
+          command: ./ci/go.sh
+
+  cpp:
+    docker:
+      - image: jfsmig/cams-ci:latest
+    steps:
+      - checkout
+      - run:
+          name: C++
+          command: ./ci/cpp.sh
 
 workflows:
   build-and-test-workflow:
     jobs:
-      - build-and-test
+      - go
+      - cpp

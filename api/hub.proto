@@ -1,0 +1,155 @@
+// Copyright (c) 2022-2024 The authors (see the AUTHORS file)
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+syntax = "proto3";
+
+option go_package = "../api/pb;pb";
+
+package cams.api.hub;
+
+message Status {
+  uint32 code = 1;
+  string status = 2;
+}
+
+message StreamId {
+  string user = 1;
+  string stream = 2;
+}
+
+message None {}
+
+
+
+
+// The service dedicated to the agents
+// It is all about controlling media streams
+service Controller {
+  // Stream of commands from the server to the client
+  rpc Control(stream None) returns (stream DownstreamControlRequest) {}
+}
+
+enum DownstreamCommandType {
+    DOWNSTREAM_COMMAND_TYPE_UNSPECIFIED = 0;
+    DOWNSTREAM_COMMAND_TYPE_PLAY = 1;
+    DOWNSTREAM_COMMAND_TYPE_STOP = 2;
+}
+
+// What should be done
+message DownstreamControlRequest {
+  string streamID = 1;
+  DownstreamCommandType command = 2;
+}
+
+
+
+
+// The service dedicated to the agents 
+// It is all about their cameras producing media frames
+service Uploader {
+  // Stream of media frames from the client to the server
+  // There should be at most one long-standing call to MediaUpload per agent connected
+  // to the cloud.
+  rpc MediaUpload(stream DownstreamMediaFrame) returns (None) {}
+}
+
+enum DownstreamMediaFrameType {
+  DOWNSTREAM_MEDIA_FRAME_TYPE_UNSPECIFIED = 0;
+  DOWNSTREAM_MEDIA_FRAME_TYPE_RTP = 1;
+  DOWNSTREAM_MEDIA_FRAME_TYPE_RTCP = 2;
+  DOWNSTREAM_MEDIA_FRAME_TYPE_SDP = 3;
+}
+
+message DownstreamMediaFrame {
+  DownstreamMediaFrameType type = 2;
+  bytes payload = 3;
+
+  // Which media of the session description the payload belongs to, as the
+  // zero-based index of its "m=" section.
+  //
+  // Without it a second media would be indistinguishable on the wire from the
+  // first: the payload is an opaque RTP or RTCP packet, and matching it back to
+  // a media by payload type only works while every media has a distinct one.
+  // A session description describes them all and always reports 0.
+  uint32 track = 4;
+
+  // When the agent forwarded the packet, in nanoseconds since the Unix epoch.
+  //
+  // Diagnostic only. Presentation timestamps come from the RTP headers, which
+  // are the only clock the camera itself provides; this one measures how long a
+  // packet took to reach the hub, which no other field can express.
+  int64 forwarded_unix_nanos = 5;
+}
+
+
+
+
+// The service is dedicated to the agents
+// It is used for authentication and registration of their cameras
+service Registrar {
+  rpc Register(RegisterRequest) returns (None) {}
+}
+
+enum VideoEncoding {
+  VIDEO_ENCODING_UNSPECIFIED = 0;
+  VIDEO_ENCODING_H264 = 1;
+  VIDEO_ENCODING_H265 = 2;
+  VIDEO_ENCODING_JPEG = 3;
+}
+
+message RegisterRequest {
+  StreamId id = 1;
+
+  // What the camera was last seen producing, so that the hub knows the cost of
+  // a stream before it commits a thread and a pipeline to it. Only H.264
+  // remuxes into fMP4 and plays everywhere; H.265 remuxes too but plays in
+  // fewer browsers; anything else needs a transcoder, which is roughly two
+  // cores per camera.
+  //
+  // UNSPECIFIED means the agent has not set one up yet -- a registered camera
+  // nobody has asked to play -- or that the agent predates this field. It never
+  // means the camera has no video. Agents and hub are upgraded separately, so
+  // assume a skew of at least one release in both directions.
+  VideoEncoding encoding = 2;
+
+  // The frame size of that stream, zero when unknown. A camera commonly offers
+  // a main stream and a much smaller substream, and which one the agent picked
+  // is most of what the stream will cost to store.
+  uint32 width = 3;
+  uint32 height = 4;
+
+  // The camera's advertised GOP length in frames, zero when unknown or not
+  // reported. It bounds how short a fragment can be, since a fragment only
+  // breaks on a keyframe, and therefore how low the latency can go.
+  uint32 gop_length = 5;
+}
+
+
+
+
+// The service is dedicated to admins
+// It pilots the agents on the field from the cloud
+service Viewer {
+  rpc Play(PlayRequest) returns (None) {}
+  rpc Pause(PauseRequest) returns (None) {}
+}
+
+message PlayRequest {
+  StreamId id = 1;
+}
+
+message PauseRequest {
+  StreamId id = 1;
+}

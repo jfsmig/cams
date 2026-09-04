@@ -34,10 +34,19 @@ type Swarm interface {
 }
 
 func SwarmRun(ctx0 context.Context, callbacks ...SwarmFunc) {
-	Logger.Trace().Str("action", "spawn").Strs("f", funcNames(callbacks...)).Msg("swarm")
-
 	s := NewSwarm(ctx0)
-	defer s.Cancel() // avoids a leak
+	// The order is deliberate and easy to get wrong in both directions.
+	// Deferred calls run last-in first-out, so this is Wait and then Cancel:
+	// SwarmRun's contract is to return once every callback has returned, and
+	// the Cancel afterwards releases the derived context rather than releasing
+	// the members. Swapping them makes SwarmRun cancel the work it has just
+	// started.
+	//
+	// A member that never returns therefore blocks here for good. That is the
+	// contract, not a defect: a member is responsible for observing its own
+	// context. A group whose members should stop when any one of them does is
+	// an Ensemble, not a Swarm.
+	defer s.Cancel()
 	defer s.Wait()
 	for _, cb := range callbacks {
 		s.Run(cb)
@@ -69,7 +78,10 @@ func (s *realSwarm) Wait() { s.wg.Wait() }
 func (s *realSwarm) Count() uint32 { return atomic.LoadUint32(&s.active) }
 
 const (
-	MinusOne uint32 = math.MaxUint32 - 1
+	// MinusOne is the two's complement encoding of -1 for a uint32, meant to be
+	// passed to atomic.AddUint32 as a decrement. It has to be exactly MaxUint32:
+	// MaxUint32-1 subtracts 2 and makes the counter underflow.
+	MinusOne uint32 = math.MaxUint32
 )
 
 func funcName(f SwarmFunc) string {
@@ -85,47 +97,46 @@ func funcNames(allFuncs ...SwarmFunc) []string {
 }
 
 func (s *realSwarm) Run(cb SwarmFunc) {
-	s.runMaybeLog(cb, true)
-}
-
-func (s *realSwarm) runMaybeLog(cb SwarmFunc, log bool) {
+	// Account for the new member before it starts, so that Count() never reports
+	// an idle group in the window between Run() returning and the goroutine
+	// being scheduled.
 	s.wg.Add(1)
+	atomic.AddUint32(&s.active, 1)
 	go func() {
 		defer s.wg.Done()
-		atomic.AddUint32(&s.active, 1)
 		defer atomic.AddUint32(&s.active, MinusOne)
 		cb(s.ctx)
 	}()
 }
 
-func GroupRun(ctx0 context.Context, callbacks ...SwarmFunc) {
-	Logger.Trace().Str("action", "spawn").Strs("f", funcNames(callbacks...)).Msg("group")
-
-	s := NewGroup(ctx0)
-	defer s.Cancel() // avoids a leak
+func EnsembleRun(ctx0 context.Context, callbacks ...SwarmFunc) {
+	s := NewEnsemble(ctx0)
+	// Wait then Cancel, as in SwarmRun. Here the wait is bounded by the group
+	// itself: an Ensemble cancels every member as soon as one of them returns.
+	defer s.Cancel()
 	defer s.Wait()
 	for _, cb := range callbacks {
 		s.Run(cb)
 	}
 }
 
-type realGroup struct {
+type realEnsemble struct {
 	swarm realSwarm
 }
 
-func NewGroup(ctx context.Context) Swarm { return &realGroup{*newRealSwarm(ctx)} }
+func NewEnsemble(ctx context.Context) Swarm { return &realEnsemble{*newRealSwarm(ctx)} }
 
-func (s *realGroup) Cancel() { s.swarm.Cancel() }
+func (s *realEnsemble) Cancel() { s.swarm.Cancel() }
 
-func (s *realGroup) Wait() { s.swarm.Wait() }
+func (s *realEnsemble) Wait() { s.swarm.Wait() }
 
-func (s *realGroup) Count() uint32 { return s.swarm.Count() }
+func (s *realEnsemble) Count() uint32 { return s.swarm.Count() }
 
-func (s *realGroup) Run(cb SwarmFunc) {
-	s.swarm.runMaybeLog(func(ctx context.Context) {
+func (s *realEnsemble) Run(cb SwarmFunc) {
+	s.swarm.Run(func(ctx context.Context) {
 		// Whatever the exit cause of the cb, this cancellation triggers the
 		// exit of all the other cb of the Group
 		defer s.Cancel()
 		cb(ctx)
-	}, false)
+	})
 }

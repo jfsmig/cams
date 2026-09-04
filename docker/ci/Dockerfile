@@ -1,170 +1,151 @@
-ARG UBUNTU_VERSION=22.04
+# Copyright (c) 2022-2024 The authors (see the AUTHORS file)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# The CI image for both CI systems: .circleci/config.yml and
+# .github/workflows/ci.yml run ci/go.sh and ci/cpp.sh inside it.
+#
+# Everything the build needs comes from the distribution, apart from the Go
+# toolchain, which has to stay ahead of go/go.mod. The previous revision built
+# CMake and gRPC from source and pinned ~55 of FFmpeg's own build dependencies
+# under version-suffixed package names, which made the image unbuildable on any
+# newer base — and it never installed libarchive, so the C++ half could not be
+# built here at all.
+
+ARG UBUNTU_VERSION=26.04
 
 FROM ubuntu:${UBUNTU_VERSION} AS cams-dev
 
 USER 0
 LABEL \
     maintainer="jf.smigielski@gmail.com" \
-    version="0.1" \
+    version="0.2" \
     description="Cams CI image, packed with all the build dependencies"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN set -ex \
  && echo "Etc/UTC" > /etc/timezone \
- && ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime
+ && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
-# Install the system dependencies of the installation process
+# The build dependencies, all unversioned: naming SONAME digits is what pinned
+# the previous image to one release of the distribution.
+#
+# libav* is needed by cpp/hub, which requires FFmpeg >= 7 (libavformat 61).
+# Only three modules are asked for: the media path remuxes and never decodes, so
+# it has no use for libavfilter, libswscale or libswresample. Asking for less is
+# not the same as excluding them -- the distribution pulls all three in behind
+# these, headers included, so this list documents the intent and does not
+# enforce it. What keeps a transcoder out of cpp/hub is review.
+# libarchive by the tar replay harness in cpp/hub/test_rtp2hls.cpp; protoc and
+# the two protoc plugins by both halves, since api/hub.proto is the source of
+# truth for the Go codec as well.
 RUN set -ex \
  && apt-get update \
  && apt-get dist-upgrade -y \
  && apt-get install -y --no-install-recommends \
         ca-certificates \
-        gosu sudo \
-        git \
         curl \
+        git \
+        openssh-client \
+        sudo \
         build-essential \
-        autoconf \
-        libtool \
-        pkg-config \
-        gdb \
         clang \
-        libc++-dev \
-        zlib1g zlib1g-dev \
-        libre2-9 libre2-dev \
+        gdb \
+        pkg-config \
+        cmake \
+        ninja-build \
         libssl-dev \
-        ffmpeg \
-        libavcodec58 libavcodec-dev \
-        libavdevice58 libavdevice-dev \
-        libavfilter7 libavfilter-dev \
-        libavformat58 libavformat-dev \
-        libavutil56 libavutil-dev \
- && apt-get install -y --no-install-recommends \
-        libmysofa-dev libmysofa1 \
-        libvidstab-dev libvidstab1.1 \
-        libva-dev libva2 \
-        libass-dev libass9 \
-        libpocketsphinx-dev libpocketsphinx3 \
-        libsphinxbase-dev libsphinxbase3 \
-        libbs2b-dev libbs2b0 \
-        liblilv-dev liblilv-0-0 \
-        libsratom-dev libsratom-0-0 \
-        libsord-dev libsord-0-0 \
-        libserd-dev libserd-0-0 \
-        librubberband-dev librubberband2 \
-        libsamplerate0-dev libsamplerate0 \
-        flite1-dev libflite1 \
-        libzmq3-dev libzmq5 \
-        libzimg-dev libzimg2 \
-        libmfx-dev libmfx1 \
-        opencl-c-headers opencl-headers opencl-clhpp-headers nvidia-opencl-dev \
-        libbz2-dev libbz2-1.0 \
-        libgme-dev libgme0 \
-        libopenmpt-dev libopenmpt0 \
-        libchromaprint-dev libchromaprint1 \
-        libbluray-dev libbluray2 \
-        libgnutls28-dev libgnutls30 \
-        librabbitmq-dev librabbitmq4 \
-        libsrt-gnutls-dev \
-        libssh-dev libssh-4 \
-        libvpx-dev libvpx7 \
-        libwebp-dev libwebp7 \
-        libwebpmux3 \
-        liblzma-dev liblzma5 \
-        libdav1d-dev libdav1d5 \
-        librsvg2-dev librsvg2-2 \
-        libzvbi-dev libzvbi0 \
-        libsnappy-dev libsnappy1v5 \
-        libaom-dev libaom3 \
-        libcodec2-dev libcodec2-1.0 \
-        libgsm1-dev libgsm1 \
-        libmp3lame-dev libmp3lame0 \
-        libopenjp2-7-dev libopenjp2-7 \
-        libopus-dev libopus0 \
-        libtheora-dev libtheora0 \
-        libspeex-dev libspeex1 \
-        libshine-dev libshine3 \
-        libtwolame-dev libtwolame0 \
-        libx264-dev libx264-163 \
-        libx265-dev libx265-199 \
-        libxvidcore-dev libxvidcore4 \
-        libsoxr-dev libsoxr-lsr0 \
-        libvdpau-dev libvdpau1 \
-        libdrm-dev libdrm2 \
-        libxv-dev libxv1 \
+        zlib1g-dev \
+        libgrpc++-dev \
+        libprotobuf-dev \
+        protobuf-compiler \
+        protobuf-compiler-grpc \
+        libarchive-dev \
+        libavformat-dev \
+        libavcodec-dev \
+        libavutil-dev \
  && update-ca-certificates \
- && apt-get autoremove --purge \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
 #----------------------------------------------------------------------------#
-# Install the custom build tools
+# The Go toolchain, from upstream rather than from the distribution: it has to
+# be at or above the version in go/go.mod.
 
-ARG CMAKE_VERSION=v3.26.3
-RUN set -ex \
- && git clone https://github.com/Kitware/CMake.git \
- && cd CMake \
- && git checkout -b release-${CMAKE_VERSION} ${CMAKE_VERSION} \
- && git submodule update --init \
- && ./bootstrap --prefix=/usr --parallel=`nproc --ignore=2` \
- && make -j `nproc --ignore=2` \
- && make install \
- && cd - \
- && rm -rf CMake
-
-ARG GRPC_VERSION=v1.59.0
-RUN set -ex \
- && git clone https://github.com/grpc/grpc.git \
- && cd grpc \
- && git checkout -b release-${GRPC_VERSION} ${GRPC_VERSION} \
- && git submodule update --init \
- && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local . \
- && make -j `nproc --ignore=2` \
- && make install \
- && cd - \
- && rm -rf grpc
-
-ARG GO_VERSION=1.21.4
+ARG GO_VERSION=1.27.1
 ARG GO_URL=https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz
-RUN set -ex\
- && curl  -K - -SL ${GO_URL} -o /tmp/go.linux-amd64.tar.gz \
+RUN set -ex \
+ && curl -SL ${GO_URL} -o /tmp/go.linux-amd64.tar.gz \
  && tar -C /usr/local -zxf /tmp/go.linux-amd64.tar.gz \
  && update-alternatives --install /usr/bin/go    go    /usr/local/go/bin/go    100 \
  && update-alternatives --install /usr/bin/gofmt gofmt /usr/local/go/bin/gofmt 100 \
  && rm -f /tmp/go.linux-amd64.tar.gz
 
+# Installed into /usr/local/bin, as root, so that they are on PATH for whatever
+# UID the CI runs as. ci/go.sh needs the two protoc plugins for its check that
+# the committed codec still matches api/hub.proto.
+#
+# The two protoc plugins are pinned, not @latest, and pinned to the versions
+# that match go/go.mod: protoc-gen-go tracks google.golang.org/protobuf and
+# protoc-gen-go-grpc tracks google.golang.org/grpc. A newer plugin emits code
+# against a newer runtime -- protoc-gen-go-grpc 1.6 wants
+# grpc.SupportPackageIsVersion9, which grpc 1.61 does not have -- so @latest
+# here would break the build every time the image was rebuilt. Bump these two
+# together with go.mod, then regenerate and commit the codec.
+ARG PROTOC_GEN_GO_VERSION=v1.32.0
+ARG PROTOC_GEN_GO_GRPC_VERSION=v1.3.0
+ENV GOROOT=/usr/local/go
+RUN set -ex \
+ && export GOBIN=/usr/local/bin GOPATH=/tmp/gopath \
+ && for tool in \
+        golang.org/x/tools/cmd/goimports@latest \
+        golang.org/x/tools/cmd/stringer@latest \
+        honnef.co/go/tools/cmd/staticcheck@latest \
+        google.golang.org/protobuf/cmd/protoc-gen-go@${PROTOC_GEN_GO_VERSION} \
+        google.golang.org/grpc/cmd/protoc-gen-go-grpc@${PROTOC_GEN_GO_GRPC_VERSION} \
+    ; do /usr/local/go/bin/go install "$tool" ; done \
+ && rm -rf /tmp/gopath
+
 #----------------------------------------------------------------------------#
-# Create an environment for a non-privileged user
+# Fail here, at image build time, rather than halfway through a CI run.
 
 RUN set -ex \
- && export GOBIN=/usr/bin \
- && /usr/bin/go install golang.org/x/tools/cmd/goimports@latest \
- && /usr/bin/go install golang.org/x/tools/cmd/stringer@latest \
- && /usr/bin/go install honnef.co/go/tools/cmd/staticcheck@latest 
+ && pkg-config --atleast-version=61 libavformat \
+ && pkg-config --atleast-version=61 libavcodec \
+ && pkg-config --atleast-version=59 libavutil \
+ && pkg-config --exists grpc++ \
+ && pkg-config --exists protobuf \
+ && pkg-config --exists libarchive \
+ && for t in go gofmt cmake ctest pkg-config git \
+             protoc grpc_cpp_plugin protoc-gen-go protoc-gen-go-grpc ; do \
+        command -v "$t" >/dev/null || { echo "missing: $t" >&2 ; exit 1 ; } ; \
+    done \
+ && go version \
+ && cmake --version | head -1 \
+ && printf 'libavformat %s / grpc++ %s\n' \
+        "$(pkg-config --modversion libavformat)" \
+        "$(pkg-config --modversion grpc++)"
 
-# && /usr/bin/go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1 \
-# && /usr/bin/go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2
+#----------------------------------------------------------------------------#
+# An unprivileged user for interactive use. CI runs as root, which is why the
+# tools above are in /usr/local/bin and not under this user's home.
 
 ARG LOCAL_USER=dev
-ENV GOPATH=/home/$LOCAL_USER/go GOROOT=/usr/local/go
+RUN set -ex \
+ && useradd -U -m -s /bin/bash $LOCAL_USER
 
-#	RUN set -ex \
-#	 && mkdir /etc/skel/build /etc/skel/go /etc/skel/src \
-#	 && groupadd -g 1000 $LOCAL_USER \
-#	 && useradd -g 1000 -u 1000 -m $LOCAL_USER \
-#	 && usermod -aG sudo $LOCAL_USER \
-#	 && usermod --shell /bin/bash $LOCAL_USER \
-#	 && echo "export GIT_TRACE_PACKET=1" >> /home/$LOCAL_USER/.bashrc \
-#	 && echo "export GIT_TRACE=1" >> /home/$LOCAL_USER/.bashrc \
-#	 && echo "export GIT_CURL_VERBOSE=1" >> /home/$LOCAL_USER/.bashrc \
-#	 && echo "export PATH=\"/home/$LOCAL_USER/go/bin:\$PATH\"" >> /home/$LOCAL_USER/.bashrc \
-#	 && echo "export GOPATH=\"/home/$LOCAL_USER/go\"" >> /home/$LOCAL_USER/.bashrc \
-#	 && echo "export GOROOT=\"/usr/local/go\"" >> /home/$LOCAL_USER/.bashrc \
-#	 && mkdir -p -m 700 /home/$LOCAL_USER/.ssh/ \
-#	 && install -m 600 /dev/null /home/$LOCAL_USER/.ssh/config \
-#	 && chown -R $LOCAL_USER:$LOCAL_USER /home/$LOCAL_USER/
-#	USER ${LOCAL_USER}
-#	WORKDIR /home/${LOCAL_USER}
+VOLUME /workspace
 
-CMD ["/usr/bin/bash", "-l"]
-
+CMD ["/bin/bash", "-l"]
