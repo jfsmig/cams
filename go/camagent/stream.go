@@ -307,7 +307,11 @@ func (cam *Agent) queryMediaUrl(ctx context.Context) (*base.URL, error) {
 	// come back reconfigured -- another encoder, another resolution -- and the
 	// only way to notice is to look. Nothing here is cached, and the SDK caches
 	// nothing either: sdk.deviceWrapper holds a client and no profile state.
-	chosen, ok := chooseProfile(videoProfilesOf(cam.onvifClient.FetchProfiles(ctx)))
+	offered, err := cam.onvifClient.MediaProfiles(ctx)
+	if err != nil {
+		return nil, errors.Annotate(err, "profiles")
+	}
+	chosen, ok := chooseProfile(videoProfilesOf(offered))
 	if !ok {
 		return nil, errors.NotFoundf("no ONVIF profile offering a video stream")
 	}

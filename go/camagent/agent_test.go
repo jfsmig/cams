@@ -27,9 +27,9 @@ import (
 	"github.com/jfsmig/cams/go/camagent"
 	"github.com/jfsmig/cams/go/camctrl"
 	"github.com/jfsmig/cams/go/mediabus"
-	"github.com/jfsmig/onvif/sdk"
-	"github.com/jfsmig/onvif/xsd"
-	"github.com/jfsmig/onvif/xsd/onvif"
+	"github.com/jfsmig/onvif/v2/sdk"
+	"github.com/jfsmig/onvif/v2/xsd"
+	"github.com/jfsmig/onvif/v2/xsd/onvif"
 	"github.com/juju/errors"
 	"go.nanomsg.org/mangos/v3"
 	"go.nanomsg.org/mangos/v3/protocol/req"
@@ -37,34 +37,36 @@ import (
 	_ "go.nanomsg.org/mangos/v3/transport/inproc"
 )
 
-// fakeAppliance embeds sdk.Appliance so that only the two methods the agent
-// actually calls need an implementation. Any other call nil-panics, which is
-// the point: it would tell us the agent started depending on more of ONVIF.
+// fakeAppliance implements camagent.Appliance, which is the whole of what the
+// agent uses of an ONVIF device: an identity and the media profiles on offer.
+// It is deliberately not built on sdk.Appliance -- the SDK reaches the profiles
+// through *sdk.ProfileS, a concrete type over an unexported client, so this
+// fixture could not exist at that boundary.
 type fakeAppliance struct {
-	sdk.Appliance
 	uuid string
 	uri  string
 }
 
+var _ camagent.Appliance = (*fakeAppliance)(nil)
+
 func (f *fakeAppliance) GetUUID() string { return f.uuid }
 
-// FetchProfiles offers one H.264 profile carrying f.uri, which is what
+// MediaProfiles offers one H.264 profile carrying f.uri, which is what
 // chooseProfile picks from. The agent asks for the profiles rather than for a
-// stream URI, because the SDK's own FetchStreamURI walks a map and answers with
-// an arbitrary one.
-func (f *fakeAppliance) FetchProfiles(_ context.Context) sdk.Profiles {
+// stream URI, because the SDK's own FetchStreamURI returns just one of them.
+func (f *fakeAppliance) MediaProfiles(_ context.Context) (sdk.MediaProfiles, error) {
 	const token onvif.ReferenceToken = "main"
 
-	profile := &sdk.XProfile{}
+	profile := &sdk.MediaProfile{}
 	profile.Profile.Token = token
 	profile.Profile.VideoEncoderConfiguration.Encoding = "H264"
 	profile.Profile.VideoEncoderConfiguration.Resolution.Width = 640
 	profile.Profile.VideoEncoderConfiguration.Resolution.Height = 480
 	profile.Uris.Stream.Uri = xsd.AnyURI(f.uri)
 
-	return sdk.Profiles{
-		Profiles: map[onvif.ReferenceToken]*sdk.XProfile{token: profile},
-	}
+	return sdk.MediaProfiles{
+		Profiles: map[onvif.ReferenceToken]*sdk.MediaProfile{token: profile},
+	}, nil
 }
 
 // mediaEndpoint binds a puller that drains whatever the camera pushes, and

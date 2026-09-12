@@ -29,7 +29,6 @@ import (
 	"github.com/jfsmig/cams/go/agentbus"
 	"github.com/jfsmig/cams/go/camctrl"
 	"github.com/jfsmig/cams/go/utils"
-	"github.com/jfsmig/onvif/sdk"
 	"github.com/juju/errors"
 	"github.com/rs/zerolog"
 )
@@ -42,12 +41,12 @@ type Agent struct {
 	mediaURL string
 
 	id          string
-	onvifClient sdk.Appliance
+	onvifClient Appliance
 
 	// user and password go into the stream URL, which is where gortsplib reads
-	// them from. They cannot be had from the appliance: sdk.Appliance does not
+	// them from. They cannot be had from the appliance: the SDK does not
 	// expose the credentials it was built with, and FetchStreamURI -- which
-	// injected them itself -- is what chooseProfile replaces.
+	// used to inject them itself -- is what chooseProfile replaces.
 	user     string
 	password string
 
@@ -103,7 +102,7 @@ func WithCredentials(user, password string) Option {
 // controller built right after this call would be refused. It also means a
 // duplicate camera identifier is reported now, as mangos.ErrAddrInUse, instead
 // of silently sharing an endpoint.
-func New(appliance sdk.Appliance, bindURL, mediaURL string, opts ...Option) (*Agent, error) {
+func New(appliance Appliance, bindURL, mediaURL string, opts ...Option) (*Agent, error) {
 	cam := &Agent{
 		mediaURL:    mediaURL,
 		id:          appliance.GetUUID(),

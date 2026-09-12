@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jfsmig/onvif/sdk"
+	"github.com/jfsmig/onvif/v2/sdk"
 )
 
 // ONVIF spells the video encodings this way in VideoEncoderConfiguration.
@@ -61,12 +61,13 @@ func (p videoProfile) area() int { return p.width * p.height }
 
 // videoProfilesOf flattens what the SDK hands back.
 //
-// The shape it arrives in is why any of this exists: sdk.FetchProfiles returns
-// a map, and sdk.FetchStreamURI iterates it and returns the first key it
-// happens to reach. Go randomises map iteration, so the same camera answered
-// with an arbitrary profile -- another codec, another resolution, another
-// bitrate -- on every reconnect, and reconnects happen a second apart.
-func videoProfilesOf(offered sdk.Profiles) []videoProfile {
+// The shape it arrives in is why any of this exists: FetchMediaProfiles
+// returns a map, and the SDK's own FetchStreamURI picks one entry out of it.
+// It sorts the tokens today, but it used to answer with whichever key map
+// iteration reached first, so the same camera served another codec, another
+// resolution and another bitrate on every reconnect -- and reconnects happen a
+// second apart. Choosing here is what makes the answer ours and repeatable.
+func videoProfilesOf(offered sdk.MediaProfiles) []videoProfile {
 	out := make([]videoProfile, 0, len(offered.Profiles))
 	for token, p := range offered.Profiles {
 		if p == nil {

@@ -19,8 +19,8 @@ import (
 	"context"
 
 	"github.com/jfsmig/cams/go/utils"
-	"github.com/jfsmig/onvif/networking"
-	wsdiscovery "github.com/jfsmig/onvif/ws-discovery"
+	"github.com/jfsmig/go-wsd/wsd"
+	"github.com/jfsmig/onvif/v2/networking"
 	"github.com/rs/zerolog"
 )
 
@@ -61,7 +61,10 @@ func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 			return
 
 		case generation := <-ls.trigger:
-			devices, err := wsdiscovery.GetAvailableDevicesAtSpecificEthernetInterface(ls.ItfName)
+			// The zero ProbeOptions is the dialect ONVIF mandates, and the
+			// context bounds the collection window, so a rescan in flight
+			// ends with the agent rather than outliving it.
+			devices, err := wsd.Discover(ctx, ls.ItfName, wsd.ProbeOptions{})
 			if err != nil {
 				ls.warn(err).Uint32("gen", generation).Msg("nic rescan failure")
 				continue
@@ -69,9 +72,21 @@ func (ls *Nic) RunRescanLoop(ctx context.Context, register RegistrationFunc) {
 			if len(devices) > 0 {
 				ls.debug().Uint32("gen", generation).Int("found", len(devices)).Msg("nic rescan success")
 			}
-			register(ctx, generation, devices)
+			register(ctx, generation, clientsOf(devices))
 		}
 	}
+}
+
+// clientsOf narrows what discovery reports to what the ONVIF client needs.
+// wsd.Device also carries the address the datagram came from and the service
+// URL as advertised; neither is used here, and both are claims made by an
+// unauthenticated datagram.
+func clientsOf(devices []wsd.Device) []networking.ClientInfo {
+	clients := make([]networking.ClientInfo, 0, len(devices))
+	for _, dev := range devices {
+		clients = append(clients, networking.ClientInfo{Xaddr: dev.Xaddr, Uuid: dev.UUID})
+	}
+	return clients
 }
 
 func (ls *Nic) TriggerRescanAsync(ctx context.Context, generation uint32) {

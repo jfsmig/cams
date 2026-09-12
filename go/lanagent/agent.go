@@ -29,8 +29,8 @@ import (
 	"github.com/jfsmig/cams/go/lanctrl"
 	"github.com/jfsmig/cams/go/utils"
 	"github.com/jfsmig/go-bags"
-	"github.com/jfsmig/onvif/networking"
-	"github.com/jfsmig/onvif/sdk"
+	"github.com/jfsmig/onvif/v2/networking"
+	"github.com/jfsmig/onvif/v2/sdk"
 	"github.com/juju/errors"
 )
 

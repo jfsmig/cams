@@ -29,9 +29,9 @@ import (
 	"github.com/jfsmig/cams/go/camctrl"
 	"github.com/jfsmig/cams/go/mediabus"
 	"github.com/jfsmig/cams/go/utils"
-	"github.com/jfsmig/onvif/networking"
-	"github.com/jfsmig/onvif/sdk"
-	wsdiscovery "github.com/jfsmig/onvif/ws-discovery"
+	"github.com/jfsmig/go-wsd/wsd"
+	"github.com/jfsmig/onvif/v2/networking"
+	"github.com/jfsmig/onvif/v2/sdk"
 	"github.com/juju/errors"
 )
 
@@ -42,15 +42,16 @@ var authInfo = networking.ClientAuth{
 
 func camPlay(ctx context.Context, addr string) error {
 	// FIXME(jfsmig): We currently need a UUID that is only provided by a discovery. it sucks as is.
-	allClientInfo, err := wsdiscovery.GetAvailableDevicesAtSpecificEthernetInterface("enp5s0")
+	devices, err := wsd.Discover(ctx, "enp5s0", wsd.ProbeOptions{})
 	if err != nil {
 		return errors.Annotate(err, "discover")
 	}
 
-	for _, clientInfo := range allClientInfo {
-		if clientInfo.Xaddr != addr {
+	for _, dev := range devices {
+		if dev.Xaddr != addr {
 			continue
 		}
+		clientInfo := networking.ClientInfo{Xaddr: dev.Xaddr, Uuid: dev.UUID}
 
 		dev, err := sdk.NewDevice(ctx, clientInfo, authInfo, http.DefaultClient)
 		if err != nil {
@@ -81,7 +82,7 @@ func runOneCamera(ctx context.Context, dev sdk.Appliance) error {
 
 	// The agent binds its command endpoint here, so the controller below can
 	// dial it instead of racing the goroutine that serves it.
-	agent, err := camagent.New(dev, busURL, mediaURL, camagent.NoRetry(),
+	agent, err := camagent.New(camagent.FromSDK(dev), busURL, mediaURL, camagent.NoRetry(),
 		camagent.WithCredentials(authInfo.Username, authInfo.Password))
 	if err != nil {
 		if cerr := sink.Close(); cerr != nil {

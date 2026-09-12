@@ -26,7 +26,7 @@ import (
 	"github.com/jfsmig/cams/go/lanctrl"
 	"github.com/jfsmig/cams/go/upagent"
 	"github.com/jfsmig/cams/go/utils"
-	"github.com/jfsmig/onvif/sdk"
+	"github.com/jfsmig/onvif/v2/sdk"
 	"github.com/juju/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -119,7 +119,7 @@ func newCameraFactory(cfg AgentConfig) lanagent.CameraFactory {
 		}
 
 		// The agent binds too, so the controller below can dial right away.
-		agent, err := camagent.New(appliance, busURL, mediaURL,
+		agent, err := camagent.New(camagent.FromSDK(appliance), busURL, mediaURL,
 			camagent.WithCredentials(cfg.CameraUser, cfg.CameraPassword))
 		if err != nil {
 			if cerr := sink.Close(); cerr != nil {
